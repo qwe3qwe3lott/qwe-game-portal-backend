@@ -10,6 +10,7 @@ export enum SpyWSEvents {
     CHANGE_NICKNAME = 'changeNickname',
     BECOME = 'become',
     MOVE_CARDS = 'moveCards',
+    REQUEST_TIMER = 'requestTimer',
     GET_OWNER_KEY = 'getOwnerKey',
     GET_ALL_MEMBERS = 'getAllMembers',
     GET_NICKNAME = 'getNickname',

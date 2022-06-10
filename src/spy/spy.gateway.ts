@@ -99,4 +99,9 @@ export class SpyGateway {
 	resumeGame(@MessageBody() ownerKey: string, @ConnectedSocket() socket: SocketWithData): void {
 		return this.spyService.resumeGame(ownerKey, socket.data);
 	}
+
+	@SubscribeMessage(SpyWSEvents.REQUEST_TIMER)
+	requestTimer(@ConnectedSocket() socket: SocketWithData): void {
+		return this.spyService.requestTimer(socket.data);
+	}
 }

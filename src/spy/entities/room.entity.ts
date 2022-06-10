@@ -80,6 +80,7 @@ export class Room {
 			});
 			this.channel.emit(SpyWSEvents.GET_FIELD_CARDS, this._state.field.cards);
 			this._flow.checkout(this._timeoutAction, this._options.secondsToAct);
+			this.channel.emit(SpyWSEvents.GET_TIMER, this._flow.timer);
 		};
 	}
 
@@ -104,7 +105,8 @@ export class Room {
 			fieldCards[i] = {
 				id: i+1,
 				title: `Card ${i+1}`,
-				captured: false
+				captured: false,
+				color: Field.COLOR_EMPTY
 			};
 		}
 		const field = new Field(fieldCards, { columns: this._options.columns, rows: this._options.rows });
@@ -121,6 +123,8 @@ export class Room {
 		this.channel.emit(SpyWSEvents.GET_FIELD_CARDS, this._state.field.cards);
 		this.channel.emit(SpyWSEvents.GET_SIZES, this._state.field.sizes);
 		this.channel.emit(SpyWSEvents.GET_PLAYERS, this.playersPayload);
+		this.channel.emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause);
+		this.channel.emit(SpyWSEvents.GET_TIMER, this._flow.timer);
 		this.channel.emit(SpyWSEvents.GET_RUNNING_FLAG, this.isRunning);
 	}
 
@@ -184,6 +188,7 @@ export class Room {
 			this._server.to(user.id).emit(SpyWSEvents.GET_FIELD_CARDS, this._state.field.cards);
 			this._server.to(user.id).emit(SpyWSEvents.GET_SIZES, this._state.field.sizes);
 			this._server.to(user.id).emit(SpyWSEvents.GET_PLAYERS, this.playersPayload);
+			this._server.to(user.id).emit(SpyWSEvents.GET_TIMER, this._flow.timer);
 
 			const player = this.checkRejoin(user);
 			if (player) {
@@ -214,6 +219,7 @@ export class Room {
 		this.nextCurrentPlayer();
 		this._server.to(this.currentPlayer.user.id).emit(SpyWSEvents.GET_ACT_FLAG, true);
 		this._flow.checkout(this._timeoutAction, this._options.secondsToAct);
+		this.channel.emit(SpyWSEvents.GET_TIMER, this._flow.timer);
 	}
 
 	kick(leavingUser: User) {
@@ -246,5 +252,10 @@ export class Room {
     	this.channel.emit(SpyWSEvents.GET_ALL_MEMBERS, this.membersPayload);
 		this._server.to(this._owner.user.id).emit(SpyWSEvents.GET_START_CONDITION_FLAG, this.playersConditionToStart);
 		return true;
+	}
+
+	requestTimer(user: User) {
+		if (!this.isRunning || !user) return;
+		this._server.to(user.id).emit(SpyWSEvents.GET_TIMER, this._flow.timer);
 	}
 }
