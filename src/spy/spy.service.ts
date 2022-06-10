@@ -40,9 +40,7 @@ export class SpyService {
 		if (socketData.roomId) {
 			const room = this._rooms.find(room => room.id === socketData.roomId);
 			if (!room) return false;
-			user.nickname = nickname;
-			room.broadcastNewNickname();
-			return true;
+			return room.changeNickname(user, nickname);
 		} else {
 			user.nickname = nickname;
 			return true;
@@ -126,5 +124,13 @@ export class SpyService {
 		const user = this._users.find(user => user.id === socketData.userId);
 		if (!room || !user) return;
 		room.requestTimer(user);
+	}
+
+	captureCard(cardId: number, socketData: SocketData): void {
+		if (!socketData.roomId) return;
+		const room = this._rooms.find(room => room.id === socketData.roomId);
+		const user = this._users.find(user => user.id === socketData.userId);
+		if (!room || !user) return;
+		room.captureCard(cardId, user);
 	}
 }

@@ -12,6 +12,7 @@ import {Field} from './field.entity';
 import {randomElement} from '../util/random-element.util';
 import {MovementDto} from '../dto/movement.dto';
 import {Flow} from './flow.entity';
+import {SocketData} from '../types/socket-data.type';
 
 enum Status {
 	IDLE,
@@ -46,7 +47,8 @@ export class Room {
 	private get playersPayload() {
 		return this._state.players.map(player => ({
 			id: player.id,
-			nickname: player.nickname
+			nickname: player.nickname,
+			score: player.score
 		}));
 	}
 	private _flow: Flow
@@ -64,7 +66,8 @@ export class Room {
     		maxPlayers: 5,
 			rows: 5,
 			columns: 6,
-			secondsToAct: 15
+			secondsToAct: 15,
+			winScore: 3
 		};
     	this._status = Status.IDLE;
     	this._flow = new Flow();
@@ -92,13 +95,6 @@ export class Room {
 		if (this.isRunning) return;
 		if (ownerKey !== this._ownerKey) return;
 		if (!this.playersConditionToStart) return;
-		
-		let players: Player[] = [];
-		const playersAmongMembers = this.playersAmongMembers;
-		for (let i = 0; i < playersAmongMembers.length; i++) {
-			players.push(new Player(playersAmongMembers[i].user, i+1));
-		}
-		players = players.sort(() => 0.5 - Math.random());
 
 		const fieldCards = Array<FieldCard>(this._options.columns * this._options.rows);
 		for (let i = 0; i < fieldCards.length; i++) {
@@ -109,7 +105,20 @@ export class Room {
 				color: Field.COLOR_EMPTY
 			};
 		}
-		const field = new Field(fieldCards, { columns: this._options.columns, rows: this._options.rows });
+
+		let players: Player[] = [];
+		const playersAmongMembers = this.playersAmongMembers;
+		const cardsForPlayers = [...fieldCards].sort(() => 0.5 - Math.random());
+		for (let i = 0; i < playersAmongMembers.length; i++) {
+			players.push(new Player(playersAmongMembers[i].user, i+1, cardsForPlayers[i]));
+			this._server.to(playersAmongMembers[i].user.id).emit(SpyWSEvents.GET_CARD, cardsForPlayers[i]);
+		}
+		players = players.sort(() => 0.5 - Math.random());
+
+		const field = new Field(fieldCards,
+			{ columns: this._options.columns, rows: this._options.rows },
+			cardsForPlayers.slice(playersAmongMembers.length, cardsForPlayers.length));
+
 		this._state = {
 			players,
 			field
@@ -128,7 +137,7 @@ export class Room {
 		this.channel.emit(SpyWSEvents.GET_RUNNING_FLAG, this.isRunning);
 	}
 
-	stop(ownerKey: string) {
+	stop(ownerKey: string): void {
 		if (!this.isRunning) return;
 		if (ownerKey !== this._ownerKey) return;
 		//
@@ -140,7 +149,7 @@ export class Room {
 		this.channel.emit(SpyWSEvents.GET_ACT_FLAG, false);
 	}
 
-	pause(ownerKey: string) {
+	pause(ownerKey: string): void {
 		if (!this.isRunning || this.isOnPause) return;
 		if (ownerKey !== this._ownerKey) return;
 		this._flow.pause();
@@ -150,7 +159,7 @@ export class Room {
 		this.channel.emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause);
 	}
 
-	resume(ownerKey: string) {
+	resume(ownerKey: string): void {
 		if (!this.isOnPause) return;
 		if (ownerKey !== this._ownerKey) return;
 		this._flow.resume();
@@ -160,8 +169,11 @@ export class Room {
 		this.channel.emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause);
 	}
 
-	broadcastNewNickname(): void {
+	changeNickname(user: User, nickname: string): boolean {
+		if (this.isRunning) return false;
+		user.nickname = nickname;
 		this.channel.emit(SpyWSEvents.GET_ALL_MEMBERS, this.membersPayload);
+		return true;
 	}
 
 	join(user: User): boolean {
@@ -214,6 +226,40 @@ export class Room {
 		if (!user) return;
 		if (user.id !== this.currentPlayer.user.id) return;
 		this._state.field.move(movement);
+		this.channel.emit(SpyWSEvents.GET_FIELD_CARDS, this._state.field.cards);
+		this._server.to(this.currentPlayer.user.id).emit(SpyWSEvents.GET_ACT_FLAG, false);
+		this.nextCurrentPlayer();
+		this._server.to(this.currentPlayer.user.id).emit(SpyWSEvents.GET_ACT_FLAG, true);
+		this._flow.checkout(this._timeoutAction, this._options.secondsToAct);
+		this.channel.emit(SpyWSEvents.GET_TIMER, this._flow.timer);
+	}
+
+	private get winCondition(): boolean {
+		return this.isRunning ? this._state.players.some(player => player.score >= this._options.winScore) : false;
+	}
+
+	captureCard(cardId: number, user: User): void {
+		if (!this.isRunning || this.isOnPause) return;
+		if (!user) return;
+		if (user.id !== this.currentPlayer.user.id) return;
+		const card = this._state.field.cards.find(card => card.id === cardId);
+		if (!card) return;
+		const capturedPlayer = this._state.players.find(player => player.card === card);
+		const captured = capturedPlayer && capturedPlayer.user !== user;
+		const newCard = this._state.field.capture(card, captured);
+		if (captured) {
+			this.currentPlayer.score += 1;
+			if (this.winCondition) {
+				this._status = Status.IDLE;
+				this._flow.stop();
+				this.channel.emit(SpyWSEvents.GET_RUNNING_FLAG, this.isRunning);
+				this.channel.emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause);
+				this.channel.emit(SpyWSEvents.GET_ACT_FLAG, false);
+			}
+			capturedPlayer.card = newCard;
+			this._server.to(capturedPlayer.user.id).emit(SpyWSEvents.GET_CARD, newCard);
+			this.channel.emit(SpyWSEvents.GET_PLAYERS, this.playersPayload);
+		}
 		this.channel.emit(SpyWSEvents.GET_FIELD_CARDS, this._state.field.cards);
 		this._server.to(this.currentPlayer.user.id).emit(SpyWSEvents.GET_ACT_FLAG, false);
 		this.nextCurrentPlayer();

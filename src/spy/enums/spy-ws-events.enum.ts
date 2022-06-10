@@ -11,6 +11,7 @@ export enum SpyWSEvents {
     BECOME = 'become',
     MOVE_CARDS = 'moveCards',
     REQUEST_TIMER = 'requestTimer',
+    CAPTURE_CARD = 'captureCard',
     GET_OWNER_KEY = 'getOwnerKey',
     GET_ALL_MEMBERS = 'getAllMembers',
     GET_NICKNAME = 'getNickname',
@@ -21,5 +22,6 @@ export enum SpyWSEvents {
     GET_SIZES = 'getSizes',
     GET_PLAYERS = 'getPlayers',
     GET_START_CONDITION_FLAG = 'getStartConditionFlag',
-    GET_TIMER = 'getTimer'
+    GET_TIMER = 'getTimer',
+    GET_CARD = 'getCard'
 }

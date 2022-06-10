@@ -104,4 +104,9 @@ export class SpyGateway {
 	requestTimer(@ConnectedSocket() socket: SocketWithData): void {
 		return this.spyService.requestTimer(socket.data);
 	}
+
+	@SubscribeMessage(SpyWSEvents.CAPTURE_CARD)
+	captureCard(@MessageBody() cardId: number, @ConnectedSocket() socket: SocketWithData): void {
+		return this.spyService.captureCard(cardId, socket.data);
+	}
 }
