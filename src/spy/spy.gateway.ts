@@ -109,4 +109,9 @@ export class SpyGateway {
 	captureCard(@MessageBody() cardId: number, @ConnectedSocket() socket: SocketWithData): void {
 		return this.spyService.captureCard(cardId, socket.data);
 	}
+
+	@SubscribeMessage(SpyWSEvents.ASK_CARD)
+	askCard(@MessageBody() cardId: number, @ConnectedSocket() socket: SocketWithData): void {
+		return this.spyService.askCard(cardId, socket.data);
+	}
 }

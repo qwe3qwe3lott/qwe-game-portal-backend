@@ -133,4 +133,12 @@ export class SpyService {
 		if (!room || !user) return;
 		room.captureCard(cardId, user);
 	}
+
+	askCard(cardId: number, socketData: SocketData): void {
+		if (!socketData.roomId) return;
+		const room = this._rooms.find(room => room.id === socketData.roomId);
+		const user = this._users.find(user => user.id === socketData.userId);
+		if (!room || !user) return;
+		room.askCard(cardId, user);
+	}
 }
