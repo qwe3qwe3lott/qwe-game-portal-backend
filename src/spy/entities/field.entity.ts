@@ -1,47 +1,41 @@
 import {FieldCard} from '../types/field-card.type';
 import {MovementDto} from '../dto/movement.dto';
 import {Sizes} from '../types/sizes.type';
-import {rgbToHex} from '../util/rgb-to-hex.util';
+import {Directions} from '../enums/directions.enum';
 
 export class Field {
-	public static COLOR_EMPTY = '#ffffff'
-	public static COLOR_CAPTURE = '#7fff7f'
-	public static COLOR_CAPTURE_FAIL = '#ff0000'
-	public static COLOR_ASK = '#ff7f00'
     private readonly _cards: FieldCard[]; public get cards() { return this._cards; }
     private readonly _sizes: Sizes; public get sizes() { return this._sizes; }
-	private readonly _paintedCards: FieldCard[]
+	private readonly _markedCards: FieldCard[]
 	private readonly _availableCards: FieldCard[]
 
 	constructor(cards: FieldCard[], sizes: Sizes, availableCards: FieldCard[]) {
     	this._cards = cards;
     	this._sizes = sizes;
-    	this._paintedCards = [];
+    	this._markedCards = [];
     	this._availableCards = availableCards;
 	}
 
-	private cleanCards(): void {
-		for (const paintedCard of this._paintedCards) {
-			paintedCard.color = Field.COLOR_EMPTY;
+	private unmarkCards(): void {
+		for (const markedCard of this._markedCards) {
+			delete markedCard.markMovedPercent;
+			delete markedCard.markMovedDirection;
+			delete markedCard.markCaptured;
+			delete markedCard.markAsked;
 		}
-		this._paintedCards.length = 0;
-	}
-
-	private static getMovementColorByPercent(percent: number): string {
-		const rb = Math.round(255 - (percent * 128));
-		return rgbToHex(rb,255, rb);
+		this._markedCards.length = 0;
 	}
 
 	capture(card: FieldCard, captured: boolean): FieldCard | null {
-    	this.cleanCards();
+    	this.unmarkCards();
     	if (captured) card.captured = true;
-    	card.color = captured ? Field.COLOR_CAPTURE : Field.COLOR_CAPTURE_FAIL;
-    	this._paintedCards.push(card);
+    	card.markCaptured = captured;
+    	this._markedCards.push(card);
     	return captured ? this._availableCards.shift() : null;
 	}
 
 	ask(card: FieldCard, cardsOfPlayer: FieldCard[]): number {
-    	this.cleanCards();
+    	this.unmarkCards();
     	let spiesCount = 0;
     	let cardIndex = this._cards.findIndex(c => c === card) - this._sizes.columns;
 		if (cardIndex >= 0) spiesCount += this.askRow(cardIndex, cardsOfPlayer);
@@ -59,8 +53,8 @@ export class Field {
 			 i++) {
 			if (this._cards[i]) {
 				if (this.askCard(i, cardsOfPlayer)) spiesCount++;
-				this._cards[i].color = Field.COLOR_ASK;
-				this._paintedCards.push(this._cards[i]);
+				this._cards[i].markAsked = true;
+				this._markedCards.push(this._cards[i]);
 			}
 		}
 		return spiesCount;
@@ -109,7 +103,38 @@ export class Field {
 		return false;
 	}
 
+	// Двинуть столбец или строку на игровом поле
 	move(movement: MovementDto): void {
+		this.unmarkCards();
+		// Индексы первой и последней карты в столбце или строке
+		// id у карт начинаются с 1
+		const firstCardIndex = movement.isRow ? (movement.id - 1) * this._sizes.columns : movement.id - 1;
+		const lastCardIndex = movement.isRow ? movement.id * this._sizes.columns - 1 : this._sizes.columns * this._sizes.rows - 1 - (this._sizes.columns - movement.id);
+		// Шаг между индексами карт в строке или столбце
+		const indexStep = movement.isRow ? (movement.forward ? -1 : 1) : (movement.forward ? -this._sizes.columns : this._sizes.columns);
+		const direction = movement.isRow ? (movement.forward ? Directions.RIGHT : Directions.LEFT) : (movement.forward ? Directions.DOWN : Directions.UP);
+		// Карта, которую нужно перенести на другой конец строки или столбца
+		const cardToTeleport = this._cards[movement.forward ? lastCardIndex : firstCardIndex];
+		cardToTeleport.markMovedPercent = 1;
+		cardToTeleport.markMovedDirection = direction;
+		this._markedCards.push(cardToTeleport);
+		// Количество карт в строке или столбце и счётчик для покраски карты процентно
+		const cardsCount = movement.isRow ? this._sizes.columns : this._sizes.rows;
+		let counter = cardsCount;
+		// Двигаем и помечаем карты
+		for (let i = (movement.forward ? lastCardIndex : firstCardIndex); (movement.forward ? i > firstCardIndex : i < lastCardIndex); i += indexStep) {
+			const tempCard = this._cards[i + indexStep];
+			tempCard.markMovedPercent = --counter / cardsCount;
+			tempCard.markMovedDirection = direction;
+			this._markedCards.push(tempCard);
+			this._cards[i] = tempCard;
+		}
+		// Двигаем карту на другой конец строки или столбца
+		this._cards[movement.forward ? firstCardIndex : lastCardIndex] = cardToTeleport;
+	}
+
+	// Страрая версия метода
+	/*move(movement: MovementDto): void {
     	this.cleanCards();
     	if (movement.isRow) {
     		const firstCardIndex = (movement.id-1) * this._sizes.columns;
@@ -153,7 +178,7 @@ export class Field {
 					this._paintedCards.push(card);
     				this._cards[i] = card;
     			}
-    			this._cards[movement.id-1] = lastCard;
+    			this._cards[firstCardIndex] = lastCard;
     		} else {
     			const firstCard = this._cards[firstCardIndex];
 				firstCard.color = '#7fff7f';
@@ -168,5 +193,5 @@ export class Field {
     			this._cards[lastCardIndex] = firstCard;
     		}
     	}
-	}
+	}*/
 }

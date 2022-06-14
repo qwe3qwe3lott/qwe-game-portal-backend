@@ -100,8 +100,7 @@ export class Room {
 			fieldCards[i] = {
 				id: i+1,
 				title: `Card ${i+1}`,
-				captured: false,
-				color: Field.COLOR_EMPTY
+				captured: false
 			};
 		}
 

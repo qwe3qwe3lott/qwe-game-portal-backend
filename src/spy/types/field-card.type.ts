@@ -1,6 +1,11 @@
+import {Directions} from '../enums/directions.enum';
+
 export type FieldCard = {
     id: number
     title: string
     captured: boolean
-    color: string
+    markMovedPercent?: number
+    markMovedDirection?: Directions
+    markCaptured?: boolean
+    markAsked?: boolean
 }
