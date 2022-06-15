@@ -4,5 +4,6 @@ export type RoomOptions = {
     rows: number
     columns: number
     secondsToAct: number
-    winScore: number
+    winScore: number,
+    cardPackId: number
 }

@@ -4,7 +4,7 @@ export type FieldCard = {
     id: number
     title: string
     captured: boolean
-    markMovedPercent?: number
+    url: string
     markMovedDirection?: Directions
     markCaptured?: boolean
     markAsked?: boolean

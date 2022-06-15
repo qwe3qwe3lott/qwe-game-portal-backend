@@ -1,15 +1,22 @@
-import {Injectable, Logger} from '@nestjs/common';
+import {Injectable, Logger, OnModuleInit} from '@nestjs/common';
 import {Room} from './entities/room.entity';
 import {Server} from 'socket.io';
 import {SocketData} from './types/socket-data.type';
 import {User} from './types/user.type';
 import {MovementDto} from './dto/movement.dto';
+import {CardPack} from './types/card-pack.type';
+import {vergilPack} from './util/vergil-pack.util';
 
 @Injectable()
-export class SpyService {
-	private logger: Logger = new Logger('SpyService');
-	private _rooms: Room[] = []
-	private _users: User[] = []
+export class SpyService implements OnModuleInit {
+	private readonly logger: Logger = new Logger('SpyService');
+	private readonly _rooms: Room[] = []
+	private readonly _users: User[] = []
+	private readonly _cardPacks: CardPack[] = []
+
+	onModuleInit(): void {
+		this._cardPacks.push(vergilPack);
+	}
 
 	addUser(user: User) {
 		this._users.push(user);
@@ -27,7 +34,7 @@ export class SpyService {
 	}
 
 	createRoom(server: Server): string {
-    	const room = new Room(server);
+    	const room = new Room(server, this._cardPacks);
     	this._rooms.push(room);
     	this.logger.log(`Room ${room.id} created`);
     	return room.id;

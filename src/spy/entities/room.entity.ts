@@ -13,6 +13,9 @@ import {randomElement} from '../util/random-element.util';
 import {MovementDto} from '../dto/movement.dto';
 import {Flow} from './flow.entity';
 import {LogRecord} from '../types/log-record.type';
+import {CardPack} from '../types/card-pack.type';
+import { join } from 'path';
+import {appUrl} from '../../main';
 
 enum Status {
 	IDLE,
@@ -51,12 +54,14 @@ export class Room {
 	private _flow: Flow
 	private readonly _timeoutAction: () => void
 	private get cardsOfPlayers() { return this._state.players.map(player => player.card); }
+	private _cardPacks: CardPack[];
 
-	constructor(server: Server) {
+	constructor(server: Server, cardPacks: CardPack[]) {
     	this._id = uuidv4();
     	this._owner = null;
     	this._ownerKey = uuidv4();
     	this._server = server;
+    	this._cardPacks = cardPacks;
     	this._members = [];
     	this._logger = new Logger(`Room ${this._id}`);
     	this._options = {
@@ -65,7 +70,8 @@ export class Room {
 			rows: 5,
 			columns: 5,
 			secondsToAct: 15,
-			winScore: 3
+			winScore: 3,
+			cardPackId: 1
 		};
     	this._status = Status.IDLE;
     	this._flow = new Flow();
@@ -95,11 +101,17 @@ export class Room {
 		if (ownerKey !== this._ownerKey) return;
 		if (!this.playersConditionToStart) return;
 
+		const cardPack = this._cardPacks.find(pack => pack.id === this._options.cardPackId);
+		if (!cardPack) return;
+		if (this._options.columns * this._options.rows > cardPack.cards.length) return;
+		const randomSortedCardsFromPack = [...cardPack.cards].sort(() => 0.5 - Math.random());
+
 		const fieldCards = Array<FieldCard>(this._options.columns * this._options.rows);
 		for (let i = 0; i < fieldCards.length; i++) {
 			fieldCards[i] = {
 				id: i+1,
-				title: `Card ${i+1}`,
+				title: randomSortedCardsFromPack[i].title,
+				url: `${appUrl}/cardPacks/${cardPack.path}/${randomSortedCardsFromPack[i].path}`,
 				captured: false
 			};
 		}
@@ -210,6 +222,7 @@ export class Room {
 				if (this.currentPlayer === player) {
 					this._server.to(user.id).emit(SpyWSEvents.GET_ACT_FLAG, true);
 					this._server.to(user.id).emit(SpyWSEvents.GET_ACT_CARD_IDS, this._state.field.getActCardIds(this.currentPlayer.card));
+					this._server.to(user.id).emit(SpyWSEvents.GET_CARD, player.card);
 				}
 			}
 		}
@@ -297,7 +310,7 @@ export class Room {
 		if (!card || card.captured) return;
 		if (!this._state.field.checkOpportunity(this.currentPlayer.card, card)) return;
 		const capturedPlayer = this._state.players.find(player => player.card === card);
-		const captured = capturedPlayer && capturedPlayer.user !== user;
+		const captured = capturedPlayer ? capturedPlayer.user !== user : false;
 		const newCard = this._state.field.capture(card, captured);
 		this.createAndApplyCaptureLogRecord(card, this.currentPlayer.nickname, captured ? capturedPlayer?.nickname : undefined);
 		if (captured) {

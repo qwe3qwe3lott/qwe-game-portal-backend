@@ -18,7 +18,6 @@ export class Field {
 
 	private unmarkCards(): void {
 		for (const markedCard of this._markedCards) {
-			delete markedCard.markMovedPercent;
 			delete markedCard.markMovedDirection;
 			delete markedCard.markCaptured;
 			delete markedCard.markAsked;
@@ -43,6 +42,11 @@ export class Field {
 		spiesCount += this.askRow(cardIndex, cardsOfPlayer);
 		cardIndex += this._sizes.columns;
 		spiesCount += this.askRow(cardIndex, cardsOfPlayer);
+		if (spiesCount > 0) {
+			for (const markedCard of this._markedCards) {
+				markedCard.markAsked = true;
+			}
+		}
     	return spiesCount;
 	}
 
@@ -53,7 +57,7 @@ export class Field {
 			 i++) {
 			if (this._cards[i]) {
 				if (this.askCard(i, cardsOfPlayer)) spiesCount++;
-				this._cards[i].markAsked = true;
+				this._cards[i].markAsked = false;
 				this._markedCards.push(this._cards[i]);
 			}
 		}
@@ -115,16 +119,11 @@ export class Field {
 		const direction = movement.isRow ? (movement.forward ? Directions.RIGHT : Directions.LEFT) : (movement.forward ? Directions.DOWN : Directions.UP);
 		// Карта, которую нужно перенести на другой конец строки или столбца
 		const cardToTeleport = this._cards[movement.forward ? lastCardIndex : firstCardIndex];
-		cardToTeleport.markMovedPercent = 1;
 		cardToTeleport.markMovedDirection = direction;
 		this._markedCards.push(cardToTeleport);
-		// Количество карт в строке или столбце и счётчик для покраски карты процентно
-		const cardsCount = movement.isRow ? this._sizes.columns : this._sizes.rows;
-		let counter = cardsCount;
 		// Двигаем и помечаем карты
 		for (let i = (movement.forward ? lastCardIndex : firstCardIndex); (movement.forward ? i > firstCardIndex : i < lastCardIndex); i += indexStep) {
 			const tempCard = this._cards[i + indexStep];
-			tempCard.markMovedPercent = --counter / cardsCount;
 			tempCard.markMovedDirection = direction;
 			this._markedCards.push(tempCard);
 			this._cards[i] = tempCard;
@@ -132,66 +131,4 @@ export class Field {
 		// Двигаем карту на другой конец строки или столбца
 		this._cards[movement.forward ? firstCardIndex : lastCardIndex] = cardToTeleport;
 	}
-
-	// Страрая версия метода
-	/*move(movement: MovementDto): void {
-    	this.cleanCards();
-    	if (movement.isRow) {
-    		const firstCardIndex = (movement.id-1) * this._sizes.columns;
-    		const lastCardIndex = movement.id * this._sizes.columns - 1;
-    	    if (movement.forward) {
-    	    	const lastCard = this._cards[lastCardIndex];
-    	    	lastCard.color = '#7fff7f';
-				this._paintedCards.push(lastCard);
-				let counter = this._sizes.columns;
-				for (let i = lastCardIndex; i > firstCardIndex; i--) {
-    				const card = this._cards[i-1];
-					card.color = Field.getMovementColorByPercent(--counter / this._sizes.columns);
-    				this._paintedCards.push(card);
-					this._cards[i] = card;
-    			}
-    			this._cards[firstCardIndex] = lastCard;
-    		} else {
-    	    	const firstCard = this._cards[firstCardIndex];
-				firstCard.color = '#7fff7f';
-				this._paintedCards.push(firstCard);
-				let counter = this._sizes.columns;
-    			for (let i = firstCardIndex; i < lastCardIndex; i++) {
-    				const card = this._cards[i+1];
-					card.color = Field.getMovementColorByPercent(--counter / this._sizes.columns);
-					this._paintedCards.push(card);
-    				this._cards[i] = card;
-    			}
-    			this._cards[lastCardIndex] = firstCard;
-    		}
-    	} else {
-    		const firstCardIndex = movement.id - 1;
-    		const lastCardIndex = this._sizes.columns * this._sizes.rows - 1 - (this._sizes.columns - movement.id);
-    		if (movement.forward) {
-    			const lastCard = this._cards[lastCardIndex];
-				lastCard.color = '#7fff7f';
-				this._paintedCards.push(lastCard);
-				let counter = this._sizes.rows;
-    			for (let i = lastCardIndex; i > firstCardIndex; i -= this._sizes.columns) {
-    				const card = this._cards[i-this._sizes.columns];
-					card.color = Field.getMovementColorByPercent(--counter / this._sizes.rows);
-					this._paintedCards.push(card);
-    				this._cards[i] = card;
-    			}
-    			this._cards[firstCardIndex] = lastCard;
-    		} else {
-    			const firstCard = this._cards[firstCardIndex];
-				firstCard.color = '#7fff7f';
-				this._paintedCards.push(firstCard);
-				let counter = this._sizes.rows;
-				for (let i = firstCardIndex; i < lastCardIndex; i += this._sizes.columns) {
-					const card = this._cards[i+this._sizes.columns];
-					card.color = Field.getMovementColorByPercent(--counter / this._sizes.rows);
-					this._paintedCards.push(card);
-					this._cards[i] = card;
-    			}
-    			this._cards[lastCardIndex] = firstCard;
-    		}
-    	}
-	}*/
 }
