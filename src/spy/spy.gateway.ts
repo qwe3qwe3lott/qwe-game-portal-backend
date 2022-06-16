@@ -13,8 +13,7 @@ import {RoomOptions} from './types/room-options.type';
 @WebSocketGateway({
 	namespace: 'spy',
 	cors: {
-		origin: 'http://localhost:3000',
-		credentials: true
+		origin: '*'
 	}
 })
 export class SpyGateway {
@@ -117,8 +116,13 @@ export class SpyGateway {
 		return this.spyService.askCard(cardId, socket.data);
 	}
 
-	@SubscribeMessage(SpyWSEvents.SET_OPTIONS)
-	setOptions(@MessageBody() optionsDto: OptionsDto, @ConnectedSocket() socket: SocketWithData): boolean {
-		return this.spyService.setOptions(optionsDto, socket.data);
+	@SubscribeMessage(SpyWSEvents.CHANGE_ROOM_OPTIONS)
+	changeRoomOptions(@MessageBody() optionsDto: OptionsDto, @ConnectedSocket() socket: SocketWithData): boolean {
+		return this.spyService.changeRoomOptions(optionsDto, socket.data);
+	}
+
+	@SubscribeMessage(SpyWSEvents.REQUEST_ROOM_OPTIONS)
+	requestRoomOptions(@ConnectedSocket() socket: SocketWithData): void {
+		return this.spyService.requestRoomOptions(socket.data);
 	}
 }

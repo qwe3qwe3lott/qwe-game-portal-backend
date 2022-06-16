@@ -148,11 +148,19 @@ export class SpyService implements OnModuleInit {
 		room.askCard(cardId, user);
 	}
 
-	setOptions(optionsDto: OptionsDto, socketData: SocketData): boolean {
+	changeRoomOptions(optionsDto: OptionsDto, socketData: SocketData): boolean {
 		if (!socketData.roomId) return false;
 		const room = this._rooms.find(room => room.id === socketData.roomId);
 		const user = this._users.find(user => user.id === socketData.userId);
 		if (!room || !user) return false;
 		return room.setOptions(optionsDto.options, optionsDto.ownerKey);
+	}
+
+	requestRoomOptions(socketData: SocketData): void {
+		if (!socketData.roomId) return;
+		const room = this._rooms.find(room => room.id === socketData.roomId);
+		const user = this._users.find(user => user.id === socketData.userId);
+		if (!room || !user) return;
+		return room.requestOptions(user);
 	}
 }

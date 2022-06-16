@@ -85,37 +85,37 @@ export class Room {
 	private applyOptions(options: RoomOptions): void {
 		this._options = {
 			minPlayers: (options.minPlayers && options.minPlayers < Room.MAX_MIN_PLAYERS && options.minPlayers > Room.MIN_MIN_PLAYERS) ? options.minPlayers : 2,
-			maxPlayers: (options.maxPlayers && options.maxPlayers < Room.MAX_MAX_PLAYERS && options.maxPlayers > Room.MIN_MAX_PLAYERS) ? options.maxPlayers : 2,
+			maxPlayers: (options.maxPlayers && options.maxPlayers < Room.MAX_MAX_PLAYERS && options.maxPlayers > Room.MIN_MAX_PLAYERS) ? options.maxPlayers : 8,
 			rows: (options.rows && options.rows < Room.MAX_ROWS && options.rows > Room.MIN_ROWS) ? options.rows : 5,
 			columns: (options.columns && options.columns < Room.MAX_COLUMNS && options.columns > Room.MIN_COLUMNS) ? options.columns : 5,
 			secondsToAct: (options.secondsToAct && options.secondsToAct < Room.MAX_SECONDS_TO_ACT && options.secondsToAct > Room.MIN_SECONDS_TO_ACT) ? options.secondsToAct : 60,
 			winScore: (options.winScore && options.winScore < Room.MAX_WIN_SCORE && options.winScore > Room.MIN_WIN_SCORE) ? options.winScore : 3,
 			optionsOfCards: options.optionsOfCards ?? [
-				{ title: 'Radioactive', url: 'http://localhost:3003/cardPacks/HarryDuBois/Radioactive.jpg' },
-				{ title: 'Love', url: 'http://localhost:3003/cardPacks/HarryDuBois/Love.jpg' },
-				{ title: 'Ghibli', url: 'http://localhost:3003/cardPacks/HarryDuBois/Ghibli.jpg' },
-				{ title: 'Death', url: 'http://localhost:3003/cardPacks/HarryDuBois/Death.jpg' },
-				{ title: 'Surreal', url: 'http://localhost:3003/cardPacks/HarryDuBois/Surreal.jpg' },
-				{ title: 'Robots', url: 'http://localhost:3003/cardPacks/HarryDuBois/Robots.jpg' },
-				{ title: 'No Style', url: 'http://localhost:3003/cardPacks/HarryDuBois/NoStyle.jpg' },
-				{ title: 'Wuhtercuhler', url: 'http://localhost:3003/cardPacks/HarryDuBois/Wuhtercuhler.jpg' },
-				{ title: 'Provenance', url: 'http://localhost:3003/cardPacks/HarryDuBois/Provenance.jpg' },
-				{ title: 'Moonwalker', url: 'http://localhost:3003/cardPacks/HarryDuBois/Moonwalker.jpg' },
-				{ title: 'Blacklight', url: 'http://localhost:3003/cardPacks/HarryDuBois/Blacklight.jpg' },
-				{ title: 'Rose Gold', url: 'http://localhost:3003/cardPacks/HarryDuBois/RoseGold.jpg' },
-				{ title: 'Steampunk', url: 'http://localhost:3003/cardPacks/HarryDuBois/Steampunk.jpg' },
-				{ title: 'Fantasy Art', url: 'http://localhost:3003/cardPacks/HarryDuBois/FantasyArt.jpg' },
-				{ title: 'Vibrant', url: 'http://localhost:3003/cardPacks/HarryDuBois/Vibrant.jpg' },
-				{ title: 'HD', url: 'http://localhost:3003/cardPacks/HarryDuBois/HD.jpg' },
-				{ title: 'Psychic', url: 'http://localhost:3003/cardPacks/HarryDuBois/Psychic.jpg' },
-				{ title: 'Dark Fantasy', url: 'http://localhost:3003/cardPacks/HarryDuBois/DarkFantasy.jpg' },
-				{ title: 'Mystical', url: 'http://localhost:3003/cardPacks/HarryDuBois/Mystical.jpg' },
-				{ title: 'Baroque', url: 'http://localhost:3003/cardPacks/HarryDuBois/Baroque.jpg' },
-				{ title: 'Etching', url: 'http://localhost:3003/cardPacks/HarryDuBois/Etching.jpg' },
-				{ title: 'S.Dali', url: 'http://localhost:3003/cardPacks/HarryDuBois/S.Dali.jpg' },
-				{ title: 'Psychedelic', url: 'http://localhost:3003/cardPacks/HarryDuBois/Psychedelic.jpg' },
-				{ title: 'Synthwave', url: 'http://localhost:3003/cardPacks/HarryDuBois/Synthwave.jpg' },
-				{ title: 'Ukiyoe', url: 'http://localhost:3003/cardPacks/HarryDuBois/Ukiyoe.jpg' }
+				{ title: 'Radioactive', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Radioactive.jpg' },
+				{ title: 'Love', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Love.jpg' },
+				{ title: 'Ghibli', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Ghibli.jpg' },
+				{ title: 'Death', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Death.jpg' },
+				{ title: 'Surreal', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Surreal.jpg' },
+				{ title: 'Robots', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Robots.jpg' },
+				{ title: 'No Style', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/NoStyle.jpg' },
+				{ title: 'Wuhtercuhler', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Wuhtercuhler.jpg' },
+				{ title: 'Provenance', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Provenance.jpg' },
+				{ title: 'Moonwalker', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Moonwalker.jpg' },
+				{ title: 'Blacklight', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Blacklight.jpg' },
+				{ title: 'Rose Gold', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/RoseGold.jpg' },
+				{ title: 'Steampunk', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Steampunk.jpg' },
+				{ title: 'Fantasy Art', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/FantasyArt.jpg' },
+				{ title: 'Vibrant', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Vibrant.jpg' },
+				{ title: 'HD', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/HD.jpg' },
+				{ title: 'Psychic', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Psychic.jpg' },
+				{ title: 'Dark Fantasy', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/DarkFantasy.jpg' },
+				{ title: 'Mystical', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Mystical.jpg' },
+				{ title: 'Baroque', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Baroque.jpg' },
+				{ title: 'Etching', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Etching.jpg' },
+				{ title: 'S.Dali', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/S.Dali.jpg' },
+				{ title: 'Psychedelic', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Psychedelic.jpg' },
+				{ title: 'Synthwave', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Synthwave.jpg' },
+				{ title: 'Ukiyoe', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Ukiyoe.jpg' }
 			]
 		};
 		if (this._options.minPlayers > this._options.maxPlayers) this._options.minPlayers = this._options.maxPlayers;
@@ -221,6 +221,7 @@ export class Room {
 
 	changeNickname(user: User, nickname: string): boolean {
 		if (this.isRunning) return false;
+		if (this._members.some(member => member.user.nickname === nickname)) return false;
 		user.nickname = nickname;
 		this.channel.emit(SpyWSEvents.GET_MEMBERS, this.membersPayload);
 		return true;
@@ -244,6 +245,7 @@ export class Room {
 			this.sendStartConditionFlagToUser(this._owner.user.id);
     	}
     	user.socket.join(this._id);
+    	this.sendOptionsToUser(user.id);
     	// Наличие this._state говорит о том, что игра хоть раз запускалась
     	if (this._state) {
     		if (this._state.winner) this.sendLastWinnerToUser(user.id);
@@ -276,6 +278,7 @@ export class Room {
 		if (this.isRunning) return false;
 		if (this._ownerKey !== ownerKey) return false;
 		this.applyOptions(options);
+		this.sendOptionsToAll();
 		return true;
 	}
 
@@ -300,7 +303,7 @@ export class Room {
 	private createAndApplyCaptureLogRecord(card: FieldCard, nickname: string, capturedNickname?: string): LogRecord {
 		const logRecord: LogRecord = {
 			id: this._state.logs.length + 1,
-			text: capturedNickname ? `Игрок "${nickname}", будучи картой "${card.title}", был пойман игроком ${nickname}`
+			text: capturedNickname ? `Игрок "${capturedNickname}", будучи картой "${card.title}", был пойман игроком ${nickname}`
 				: `Игрок "${nickname}" никого не поймал, указав на карту "${card.title}"`
 		};
 		this._state.logs.unshift(logRecord);
@@ -418,9 +421,14 @@ export class Room {
 		return true;
 	}
 
-	requestTimer(user: User) {
+	requestTimer(user: User): void {
 		if (!this.isRunning || !user) return;
 		this.sendTimerToUser(user.id);
+	}
+
+	requestOptions(user: User): void {
+		if (this.isRunning || !user) return;
+		this.sendOptionsToUser(user.id);
 	}
 
 	private sendLogsToAll() { this.channel.emit(SpyWSEvents.GET_ALL_LOG_RECORDS, this._state.logs); }
@@ -453,4 +461,7 @@ export class Room {
 	private sendStartConditionFlagToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_START_CONDITION_FLAG, this.conditionToStart); }
 
 	private sendOwnerKeyToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_OWNER_KEY, this._ownerKey); }
+
+	private sendOptionsToAll() { this.channel.emit(SpyWSEvents.GET_ROOM_OPTIONS, this._options); }
+	private sendOptionsToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_ROOM_OPTIONS, this._options); }
 }
