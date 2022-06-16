@@ -16,9 +16,10 @@ export class Field {
     	this._availableCards = availableCards;
 	}
 
-	private unmarkCards(): void {
+	unmarkCards(): void {
 		for (const markedCard of this._markedCards) {
 			delete markedCard.markMovedDirection;
+			delete markedCard.markTeleportedDirection;
 			delete markedCard.markCaptured;
 			delete markedCard.markAsked;
 		}
@@ -119,7 +120,7 @@ export class Field {
 		const direction = movement.isRow ? (movement.forward ? Directions.RIGHT : Directions.LEFT) : (movement.forward ? Directions.DOWN : Directions.UP);
 		// Карта, которую нужно перенести на другой конец строки или столбца
 		const cardToTeleport = this._cards[movement.forward ? lastCardIndex : firstCardIndex];
-		cardToTeleport.markMovedDirection = direction;
+		cardToTeleport.markTeleportedDirection = Field.getOppositeDirection(direction);
 		this._markedCards.push(cardToTeleport);
 		// Двигаем и помечаем карты
 		for (let i = (movement.forward ? lastCardIndex : firstCardIndex); (movement.forward ? i > firstCardIndex : i < lastCardIndex); i += indexStep) {
@@ -130,5 +131,20 @@ export class Field {
 		}
 		// Двигаем карту на другой конец строки или столбца
 		this._cards[movement.forward ? firstCardIndex : lastCardIndex] = cardToTeleport;
+	}
+
+	private static getOppositeDirection(direction: Directions): Directions {
+    	switch (direction) {
+		case Directions.UP:
+			return Directions.DOWN;
+		case Directions.DOWN:
+			return Directions.UP;
+		case Directions.LEFT:
+			return Directions.RIGHT;
+		case Directions.RIGHT:
+			return Directions.LEFT;
+		default:
+			return Directions.UP;
+		}
 	}
 }

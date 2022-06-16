@@ -1,5 +1,5 @@
 import {User} from '../types/user.type';
-import { v4 as uuidv4 } from 'uuid';
+import {v4 as uuidv4} from 'uuid';
 import {Server} from 'socket.io';
 import {SpyWSEvents} from '../enums/spy-ws-events.enum';
 import {Member} from '../types/member.type';
@@ -13,9 +13,6 @@ import {randomElement} from '../util/random-element.util';
 import {MovementDto} from '../dto/movement.dto';
 import {Flow} from './flow.entity';
 import {LogRecord} from '../types/log-record.type';
-import {CardPack} from '../types/card-pack.type';
-import { join } from 'path';
-import {appUrl} from '../../main';
 
 enum Status {
 	IDLE,
@@ -32,7 +29,7 @@ export class Room {
     private _members: Member[]
     private get membersPayload() { return this._members.map(member => ({ isPlayer: member.isPlayer, nickname: member.user.nickname })); }
     private get playersAmongMembers() { return this._members.filter(member => member.isPlayer); }
-    private get playersConditionToStart() {
+    private get conditionToStart() {
     	const playersAmongMembersCount = this.playersAmongMembers.length;
     	return playersAmongMembersCount >= this._options.minPlayers && playersAmongMembersCount <= this._options.maxPlayers;
     }
@@ -54,25 +51,15 @@ export class Room {
 	private _flow: Flow
 	private readonly _timeoutAction: () => void
 	private get cardsOfPlayers() { return this._state.players.map(player => player.card); }
-	private _cardPacks: CardPack[];
 
-	constructor(server: Server, cardPacks: CardPack[]) {
+	constructor(server: Server, roomOptions: RoomOptions) {
     	this._id = uuidv4();
     	this._owner = null;
     	this._ownerKey = uuidv4();
     	this._server = server;
-    	this._cardPacks = cardPacks;
     	this._members = [];
     	this._logger = new Logger(`Room ${this._id}`);
-    	this._options = {
-    		minPlayers: 2,
-    		maxPlayers: 5,
-			rows: 5,
-			columns: 5,
-			secondsToAct: 15,
-			winScore: 3,
-			cardPackId: 1
-		};
+    	this.applyOptions(roomOptions);
     	this._status = Status.IDLE;
     	this._flow = new Flow();
     	this._timeoutAction = () => {
@@ -81,6 +68,58 @@ export class Room {
 			this.createAndApplyMovementLogRecord(movement, this.currentPlayer.nickname, true);
 			this.letNextPlayerToActAndLaunchTimer();
 		};
+	}
+
+	private static MIN_MIN_PLAYERS = 2;
+	private static MAX_MIN_PLAYERS = 8;
+	private static MIN_MAX_PLAYERS = 2;
+	private static MAX_MAX_PLAYERS = 8;
+	private static MIN_ROWS = 3;
+	private static MAX_ROWS = 7;
+	private static MIN_COLUMNS = 3;
+	private static MAX_COLUMNS = 7;
+	private static MIN_SECONDS_TO_ACT = 15;
+	private static MAX_SECONDS_TO_ACT = 180;
+	private static MIN_WIN_SCORE = 1;
+	private static MAX_WIN_SCORE = 5;
+	private applyOptions(options: RoomOptions): void {
+		this._options = {
+			minPlayers: (options.minPlayers && options.minPlayers < Room.MAX_MIN_PLAYERS && options.minPlayers > Room.MIN_MIN_PLAYERS) ? options.minPlayers : 2,
+			maxPlayers: (options.maxPlayers && options.maxPlayers < Room.MAX_MAX_PLAYERS && options.maxPlayers > Room.MIN_MAX_PLAYERS) ? options.maxPlayers : 2,
+			rows: (options.rows && options.rows < Room.MAX_ROWS && options.rows > Room.MIN_ROWS) ? options.rows : 5,
+			columns: (options.columns && options.columns < Room.MAX_COLUMNS && options.columns > Room.MIN_COLUMNS) ? options.columns : 5,
+			secondsToAct: (options.secondsToAct && options.secondsToAct < Room.MAX_SECONDS_TO_ACT && options.secondsToAct > Room.MIN_SECONDS_TO_ACT) ? options.secondsToAct : 60,
+			winScore: (options.winScore && options.winScore < Room.MAX_WIN_SCORE && options.winScore > Room.MIN_WIN_SCORE) ? options.winScore : 3,
+			optionsOfCards: options.optionsOfCards ?? [
+				{ title: 'Radioactive', url: 'http://localhost:3003/cardPacks/HarryDuBois/Radioactive.jpg' },
+				{ title: 'Love', url: 'http://localhost:3003/cardPacks/HarryDuBois/Love.jpg' },
+				{ title: 'Ghibli', url: 'http://localhost:3003/cardPacks/HarryDuBois/Ghibli.jpg' },
+				{ title: 'Death', url: 'http://localhost:3003/cardPacks/HarryDuBois/Death.jpg' },
+				{ title: 'Surreal', url: 'http://localhost:3003/cardPacks/HarryDuBois/Surreal.jpg' },
+				{ title: 'Robots', url: 'http://localhost:3003/cardPacks/HarryDuBois/Robots.jpg' },
+				{ title: 'No Style', url: 'http://localhost:3003/cardPacks/HarryDuBois/NoStyle.jpg' },
+				{ title: 'Wuhtercuhler', url: 'http://localhost:3003/cardPacks/HarryDuBois/Wuhtercuhler.jpg' },
+				{ title: 'Provenance', url: 'http://localhost:3003/cardPacks/HarryDuBois/Provenance.jpg' },
+				{ title: 'Moonwalker', url: 'http://localhost:3003/cardPacks/HarryDuBois/Moonwalker.jpg' },
+				{ title: 'Blacklight', url: 'http://localhost:3003/cardPacks/HarryDuBois/Blacklight.jpg' },
+				{ title: 'Rose Gold', url: 'http://localhost:3003/cardPacks/HarryDuBois/RoseGold.jpg' },
+				{ title: 'Steampunk', url: 'http://localhost:3003/cardPacks/HarryDuBois/Steampunk.jpg' },
+				{ title: 'Fantasy Art', url: 'http://localhost:3003/cardPacks/HarryDuBois/FantasyArt.jpg' },
+				{ title: 'Vibrant', url: 'http://localhost:3003/cardPacks/HarryDuBois/Vibrant.jpg' },
+				{ title: 'HD', url: 'http://localhost:3003/cardPacks/HarryDuBois/HD.jpg' },
+				{ title: 'Psychic', url: 'http://localhost:3003/cardPacks/HarryDuBois/Psychic.jpg' },
+				{ title: 'Dark Fantasy', url: 'http://localhost:3003/cardPacks/HarryDuBois/DarkFantasy.jpg' },
+				{ title: 'Mystical', url: 'http://localhost:3003/cardPacks/HarryDuBois/Mystical.jpg' },
+				{ title: 'Baroque', url: 'http://localhost:3003/cardPacks/HarryDuBois/Baroque.jpg' },
+				{ title: 'Etching', url: 'http://localhost:3003/cardPacks/HarryDuBois/Etching.jpg' },
+				{ title: 'S.Dali', url: 'http://localhost:3003/cardPacks/HarryDuBois/S.Dali.jpg' },
+				{ title: 'Psychedelic', url: 'http://localhost:3003/cardPacks/HarryDuBois/Psychedelic.jpg' },
+				{ title: 'Synthwave', url: 'http://localhost:3003/cardPacks/HarryDuBois/Synthwave.jpg' },
+				{ title: 'Ukiyoe', url: 'http://localhost:3003/cardPacks/HarryDuBois/Ukiyoe.jpg' }
+			]
+		};
+		if (this._options.minPlayers > this._options.maxPlayers) this._options.minPlayers = this._options.maxPlayers;
+		// TODO: Больше проверок
 	}
 
 	private generateRandomMovement(): MovementDto {
@@ -97,21 +136,20 @@ export class Room {
 	}
 
 	start(ownerKey: string) {
+		// Проверка возможности старта игры
 		if (this.isRunning) return;
 		if (ownerKey !== this._ownerKey) return;
-		if (!this.playersConditionToStart) return;
+		if (!this.conditionToStart) return;
 
-		const cardPack = this._cardPacks.find(pack => pack.id === this._options.cardPackId);
-		if (!cardPack) return;
-		if (this._options.columns * this._options.rows > cardPack.cards.length) return;
-		const randomSortedCardsFromPack = [...cardPack.cards].sort(() => 0.5 - Math.random());
+		if (this._options.columns * this._options.rows > this._options.optionsOfCards.length) return;
+		const randomSortedOptionsOfCards = [...this._options.optionsOfCards].sort(() => 0.5 - Math.random());
 
 		const fieldCards = Array<FieldCard>(this._options.columns * this._options.rows);
 		for (let i = 0; i < fieldCards.length; i++) {
 			fieldCards[i] = {
 				id: i+1,
-				title: randomSortedCardsFromPack[i].title,
-				url: `${appUrl}/cardPacks/${cardPack.path}/${randomSortedCardsFromPack[i].path}`,
+				title: randomSortedOptionsOfCards[i].title,
+				url: randomSortedOptionsOfCards[i].url,
 				captured: false
 			};
 		}
@@ -132,21 +170,21 @@ export class Room {
 		this._state = {
 			players,
 			field,
-			logs: []
+			logs: [],
+			winner: ''
 		};
 		//
 		this._status = Status.IS_RUNNING;
 		this._flow.checkout(this._timeoutAction, this._options.secondsToAct);
 		//
-		this.channel.emit(SpyWSEvents.GET_ACT_FLAG, false);
-		this._server.to(this.currentPlayer.user.id).emit(SpyWSEvents.GET_ACT_FLAG, true);
-		this.channel.emit(SpyWSEvents.GET_FIELD_CARDS, this._state.field.cards);
+		this.sendActFlagToAll(false);
+		this.sendActFlagToUser(this.currentPlayer.user.id, true);
+		this.sendFieldCardsToAll();
 		this._server.to(this.currentPlayer.user.id).emit(SpyWSEvents.GET_ACT_CARD_IDS, this._state.field.getActCardIds(this.currentPlayer.card));
-		this.channel.emit(SpyWSEvents.GET_SIZES, this._state.field.sizes);
-		this.channel.emit(SpyWSEvents.GET_PLAYERS, this.playersPayload);
-		this.channel.emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause);
-		this.channel.emit(SpyWSEvents.GET_TIMER, this._flow.timer);
-		this.channel.emit(SpyWSEvents.GET_RUNNING_FLAG, this.isRunning);
+		this.sendSizesToAll();
+		this.sendPlayersToAll();
+		this.sendTimerToAll();
+		this.sendRunningFlagToAll();
 	}
 
 	stop(ownerKey: string): void {
@@ -154,11 +192,11 @@ export class Room {
 		if (ownerKey !== this._ownerKey) return;
 		//
 		this._status = Status.IDLE;
+		this._state.field.unmarkCards();
+		this.sendFieldCardsToAll();
 		this._flow.stop();
 		//
-		this.channel.emit(SpyWSEvents.GET_RUNNING_FLAG, this.isRunning);
-		this.channel.emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause);
-		this.channel.emit(SpyWSEvents.GET_ACT_FLAG, false);
+		this.sendRunningFlagToAll();
 	}
 
 	pause(ownerKey: string): void {
@@ -168,7 +206,7 @@ export class Room {
 
 		this._status = Status.ON_PAUSE;
 
-		this.channel.emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause);
+		this.sendPauseFlagToAll();
 	}
 
 	resume(ownerKey: string): void {
@@ -178,13 +216,13 @@ export class Room {
 
 		this._status = Status.IS_RUNNING;
 
-		this.channel.emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause);
+		this.sendPauseFlagToAll();
 	}
 
 	changeNickname(user: User, nickname: string): boolean {
 		if (this.isRunning) return false;
 		user.nickname = nickname;
-		this.channel.emit(SpyWSEvents.GET_ALL_MEMBERS, this.membersPayload);
+		this.channel.emit(SpyWSEvents.GET_MEMBERS, this.membersPayload);
 		return true;
 	}
 
@@ -202,33 +240,43 @@ export class Room {
     	if (!this._owner) {
     	    this._owner = member;
     	    this._ownerKey = uuidv4();
-    	    this._server.to(user.id).emit(SpyWSEvents.GET_OWNER_KEY, this._ownerKey);
-    	    this._server.to(user.id).emit(SpyWSEvents.GET_START_CONDITION_FLAG, this.playersConditionToStart);
+			this.sendOwnerKeyToUser(this._owner.user.id);
+			this.sendStartConditionFlagToUser(this._owner.user.id);
     	}
     	user.socket.join(this._id);
-    	if (this.isRunning) {
-			this._server.to(user.id).emit(SpyWSEvents.GET_RUNNING_FLAG, this.isRunning);
-			this._server.to(user.id).emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause);
-			this._server.to(user.id).emit(SpyWSEvents.GET_FIELD_CARDS, this._state.field.cards);
-			this._server.to(user.id).emit(SpyWSEvents.GET_SIZES, this._state.field.sizes);
-			this._server.to(user.id).emit(SpyWSEvents.GET_PLAYERS, this.playersPayload);
-			this._server.to(user.id).emit(SpyWSEvents.GET_TIMER, this._flow.timer);
-			this._server.to(user.id).emit(SpyWSEvents.GET_ALL_LOG_RECORDS, this._state.logs);
-
-			const player = this.checkRejoin(user);
-			if (player) {
-				member.isPlayer = true;
-				player.user = user;
-				if (this.currentPlayer === player) {
-					this._server.to(user.id).emit(SpyWSEvents.GET_ACT_FLAG, true);
-					this._server.to(user.id).emit(SpyWSEvents.GET_ACT_CARD_IDS, this._state.field.getActCardIds(this.currentPlayer.card));
-					this._server.to(user.id).emit(SpyWSEvents.GET_CARD, player.card);
+    	// Наличие this._state говорит о том, что игра хоть раз запускалась
+    	if (this._state) {
+    		if (this._state.winner) this.sendLastWinnerToUser(user.id);
+			this.sendFieldCardsToUser(user.id);
+			this.sendSizesToUser(user.id);
+			this.sendPlayersToUser(user.id);
+			this.sendLogsToUser(user.id);
+			if (this.isRunning) {
+				this.sendRunningFlagToUser(user.id);
+				this.sendPauseFlagToUser(user.id);
+				this.sendTimerToUser(user.id);
+				const player = this.checkRejoin(user);
+				if (player) {
+					member.isPlayer = true;
+					player.user = user;
+					if (this.currentPlayer === player) {
+						this.sendActFlagToUser(user.id, true);
+						this._server.to(user.id).emit(SpyWSEvents.GET_ACT_CARD_IDS, this._state.field.getActCardIds(this.currentPlayer.card));
+						this._server.to(user.id).emit(SpyWSEvents.GET_CARD, player.card);
+					}
 				}
 			}
 		}
-    	this.channel.emit(SpyWSEvents.GET_ALL_MEMBERS, this.membersPayload);
+    	this.channel.emit(SpyWSEvents.GET_MEMBERS, this.membersPayload);
     	this._logger.log(`User ${user.id} joined as spectator`);
     	return true;
+	}
+
+	setOptions(options: RoomOptions, ownerKey: string): boolean {
+		if (this.isRunning) return false;
+		if (this._ownerKey !== ownerKey) return false;
+		this.applyOptions(options);
+		return true;
 	}
 
 	private checkRejoin(user: User): Player | undefined {
@@ -271,14 +319,14 @@ export class Room {
 	}
 
 	private letNextPlayerToActAndLaunchTimer(): void {
-		this._server.to(this.currentPlayer.user.id).emit(SpyWSEvents.GET_ACT_FLAG, false);
+		this.sendActFlagToUser(this.currentPlayer.user.id, false);
 		this.nextCurrentPlayer();
-		this._server.to(this.currentPlayer.user.id).emit(SpyWSEvents.GET_ACT_FLAG, true);
-		this.channel.emit(SpyWSEvents.GET_FIELD_CARDS, this._state.field.cards);
+		this.sendActFlagToUser(this.currentPlayer.user.id, true);
+		this.sendFieldCardsToAll();
 		this._server.to(this.currentPlayer.user.id).emit(SpyWSEvents.GET_ACT_CARD_IDS, this._state.field.getActCardIds(this.currentPlayer.card));
-		this.channel.emit(SpyWSEvents.GET_PLAYERS, this.playersPayload);
+		this.sendPlayersToAll();
 		this._flow.checkout(this._timeoutAction, this._options.secondsToAct);
-		this.channel.emit(SpyWSEvents.GET_TIMER, this._flow.timer);
+		this.sendTimerToAll();
 	}
 
 	moveCards(movement: MovementDto, user: User): void {
@@ -297,9 +345,11 @@ export class Room {
 	private win(): void {
 		this._status = Status.IDLE;
 		this._flow.stop();
-		this.channel.emit(SpyWSEvents.GET_RUNNING_FLAG, this.isRunning);
-		this.channel.emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause);
-		this.channel.emit(SpyWSEvents.GET_ACT_FLAG, false);
+		this.sendRunningFlagToAll();
+		this._state.winner = this.currentPlayer.nickname;
+		this.sendLastWinnerToAll();
+		this._state.field.unmarkCards();
+		this.sendFieldCardsToAll();
 	}
 
 	captureCard(cardId: number, user: User): void {
@@ -345,14 +395,13 @@ export class Room {
     	    this._owner = null;
     	    this._ownerKey = null;
     	} else if (leavingUser.id === this._owner.user.id) {
-    		const newOwner = randomElement(this._members);
-			this._owner = newOwner;
+			this._owner = randomElement(this._members);
 			this._ownerKey = uuidv4();
-			this._server.to(newOwner.user.id).emit(SpyWSEvents.GET_OWNER_KEY, this._ownerKey);
-			this._server.to(newOwner.user.id).emit(SpyWSEvents.GET_START_CONDITION_FLAG, this.playersConditionToStart);
-		}
+			this.sendOwnerKeyToUser(this._owner.user.id);
+			this.sendStartConditionFlagToUser(this._owner.user.id);
+    	}
     	leavingUser.socket.leave(this._id);
-    	this.channel.emit(SpyWSEvents.GET_ALL_MEMBERS, this.membersPayload);
+    	this.channel.emit(SpyWSEvents.GET_MEMBERS, this.membersPayload);
     	this._logger.log(`User ${leavingUser.id} left`);
 	}
 
@@ -364,13 +413,44 @@ export class Room {
     	if (!member) return false;
     	member.isPlayer = becomePlayer;
     	this._logger.log(`User ${user?.id} became ${becomePlayer ? 'player' : 'spectator'}`);
-    	this.channel.emit(SpyWSEvents.GET_ALL_MEMBERS, this.membersPayload);
-		this._server.to(this._owner.user.id).emit(SpyWSEvents.GET_START_CONDITION_FLAG, this.playersConditionToStart);
+    	this.channel.emit(SpyWSEvents.GET_MEMBERS, this.membersPayload);
+		this.sendStartConditionFlagToUser(this._owner.user.id);
 		return true;
 	}
 
 	requestTimer(user: User) {
 		if (!this.isRunning || !user) return;
-		this._server.to(user.id).emit(SpyWSEvents.GET_TIMER, this._flow.timer);
+		this.sendTimerToUser(user.id);
 	}
+
+	private sendLogsToAll() { this.channel.emit(SpyWSEvents.GET_ALL_LOG_RECORDS, this._state.logs); }
+	private sendLogsToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_ALL_LOG_RECORDS, this._state.logs); }
+
+	private sendLastWinnerToAll() { this.channel.emit(SpyWSEvents.GET_LAST_WINNER, this._state.winner); }
+	private sendLastWinnerToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_LAST_WINNER, this._state.winner); }
+
+	private sendFieldCardsToAll() { this.channel.emit(SpyWSEvents.GET_FIELD_CARDS, this._state.field.cards); }
+	private sendFieldCardsToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_FIELD_CARDS, this._state.field.cards); }
+
+	private sendSizesToAll() { this.channel.emit(SpyWSEvents.GET_SIZES, this._state.field.sizes); }
+	private sendSizesToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_SIZES, this._state.field.sizes); }
+
+	private sendPlayersToAll() { this.channel.emit(SpyWSEvents.GET_PLAYERS, this.playersPayload); }
+	private sendPlayersToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_PLAYERS, this.playersPayload); }
+
+	private sendTimerToAll() { this.channel.emit(SpyWSEvents.GET_TIMER, this._flow.timer); }
+	private sendTimerToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_TIMER, this._flow.timer); }
+
+	private sendRunningFlagToAll() { this.channel.emit(SpyWSEvents.GET_RUNNING_FLAG, this.isRunning); }
+	private sendRunningFlagToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_RUNNING_FLAG, this.isRunning); }
+
+	private sendPauseFlagToAll() { this.channel.emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause); }
+	private sendPauseFlagToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause); }
+
+	private sendActFlagToAll(flag: boolean) { this.channel.emit(SpyWSEvents.GET_ACT_FLAG, flag); }
+	private sendActFlagToUser(userId: string, flag: boolean) { this._server.to(userId).emit(SpyWSEvents.GET_ACT_FLAG, flag); }
+
+	private sendStartConditionFlagToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_START_CONDITION_FLAG, this.conditionToStart); }
+
+	private sendOwnerKeyToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_OWNER_KEY, this._ownerKey); }
 }

@@ -6,4 +6,5 @@ export type State = {
     players: Player[]
     field: Field
     logs: LogRecord[]
+    winner: string
 }

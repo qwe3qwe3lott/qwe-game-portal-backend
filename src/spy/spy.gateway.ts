@@ -7,6 +7,8 @@ import {SocketWithData} from './types/socket-with-data.type';
 import {User} from './types/user.type';
 import {generateNickname} from './util/generate-nickname.util';
 import {MovementDto} from './dto/movement.dto';
+import {OptionsDto} from './dto/options.dto';
+import {RoomOptions} from './types/room-options.type';
 
 @WebSocketGateway({
 	namespace: 'spy',
@@ -49,8 +51,8 @@ export class SpyGateway {
 	}
 
 	@SubscribeMessage(SpyWSEvents.CREATE_ROOM)
-	createRoom(): string {
-		return this.spyService.createRoom(this.server);
+	createRoom(@MessageBody() roomOptions: RoomOptions): string {
+		return this.spyService.createRoom(this.server, roomOptions);
 	}
 
 	@SubscribeMessage(SpyWSEvents.CHECK_ROOM)
@@ -113,5 +115,10 @@ export class SpyGateway {
 	@SubscribeMessage(SpyWSEvents.ASK_CARD)
 	askCard(@MessageBody() cardId: number, @ConnectedSocket() socket: SocketWithData): void {
 		return this.spyService.askCard(cardId, socket.data);
+	}
+
+	@SubscribeMessage(SpyWSEvents.SET_OPTIONS)
+	setOptions(@MessageBody() optionsDto: OptionsDto, @ConnectedSocket() socket: SocketWithData): boolean {
+		return this.spyService.setOptions(optionsDto, socket.data);
 	}
 }

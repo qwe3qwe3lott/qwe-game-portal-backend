@@ -4,18 +4,17 @@ import {Server} from 'socket.io';
 import {SocketData} from './types/socket-data.type';
 import {User} from './types/user.type';
 import {MovementDto} from './dto/movement.dto';
-import {CardPack} from './types/card-pack.type';
-import {vergilPack} from './util/vergil-pack.util';
+import {OptionsDto} from './dto/options.dto';
+import {RoomOptions} from './types/room-options.type';
 
 @Injectable()
 export class SpyService implements OnModuleInit {
 	private readonly logger: Logger = new Logger('SpyService');
 	private readonly _rooms: Room[] = []
 	private readonly _users: User[] = []
-	private readonly _cardPacks: CardPack[] = []
 
 	onModuleInit(): void {
-		this._cardPacks.push(vergilPack);
+		this.logger.log('');
 	}
 
 	addUser(user: User) {
@@ -33,8 +32,8 @@ export class SpyService implements OnModuleInit {
 		this._users.splice(userId, 1);
 	}
 
-	createRoom(server: Server): string {
-    	const room = new Room(server, this._cardPacks);
+	createRoom(server: Server, roomOptions: RoomOptions): string {
+    	const room = new Room(server, roomOptions);
     	this._rooms.push(room);
     	this.logger.log(`Room ${room.id} created`);
     	return room.id;
@@ -147,5 +146,13 @@ export class SpyService implements OnModuleInit {
 		const user = this._users.find(user => user.id === socketData.userId);
 		if (!room || !user) return;
 		room.askCard(cardId, user);
+	}
+
+	setOptions(optionsDto: OptionsDto, socketData: SocketData): boolean {
+		if (!socketData.roomId) return false;
+		const room = this._rooms.find(room => room.id === socketData.roomId);
+		const user = this._users.find(user => user.id === socketData.userId);
+		if (!room || !user) return false;
+		return room.setOptions(optionsDto.options, optionsDto.ownerKey);
 	}
 }

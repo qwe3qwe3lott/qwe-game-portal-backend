@@ -6,6 +6,7 @@ export type FieldCard = {
     captured: boolean
     url: string
     markMovedDirection?: Directions
+    markTeleportedDirection?: Directions
     markCaptured?: boolean
     markAsked?: boolean
 }

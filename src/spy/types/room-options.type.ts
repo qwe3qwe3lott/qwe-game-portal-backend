@@ -1,9 +1,11 @@
+import {CardOptions} from './card-option.type';
+
 export type RoomOptions = {
     minPlayers: number
     maxPlayers: number
     rows: number
     columns: number
     secondsToAct: number
-    winScore: number,
-    cardPackId: number
+    winScore: number
+    optionsOfCards: CardOptions[]
 }
