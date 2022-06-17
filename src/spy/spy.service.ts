@@ -39,17 +39,19 @@ export class SpyService implements OnModuleInit {
     	return room.id;
 	}
 
-	changeNickname(nickname: string, socketData: SocketData): boolean {
+	changeNickname(nickname: string, socketData: SocketData): string {
 		const user = this._users.find(user => user.id === socketData.userId);
-		if (!user) return false;
-		if (nickname.length < 3 || nickname.length > 30) return false;
+		if (!user) return '';
+		if (user.nickname === nickname) return '';
+		if (nickname.length < 3) return '';
+		if (nickname.length > 30) nickname = nickname.substring(0, 30);
 		if (socketData.roomId) {
 			const room = this._rooms.find(room => room.id === socketData.roomId);
-			if (!room) return false;
+			if (!room) return '';
 			return room.changeNickname(user, nickname);
 		} else {
 			user.nickname = nickname;
-			return true;
+			return nickname;
 		}
 	}
 

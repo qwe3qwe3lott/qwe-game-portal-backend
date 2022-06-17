@@ -45,7 +45,7 @@ export class SpyGateway {
 	}
 
 	@SubscribeMessage(SpyWSEvents.CHANGE_NICKNAME)
-	changeNickname(@MessageBody() nickname: string, @ConnectedSocket() socket: SocketWithData): boolean {
+	changeNickname(@MessageBody() nickname: string, @ConnectedSocket() socket: SocketWithData): string {
 		return this.spyService.changeNickname(nickname, socket.data);
 	}
 

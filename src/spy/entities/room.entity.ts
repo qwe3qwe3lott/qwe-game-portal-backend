@@ -132,7 +132,7 @@ export class Room {
 	}
 
 	private nextCurrentPlayer() {
-		this._state.players.unshift(this._state.players.pop());
+		this._state.players.push(this._state.players.shift());
 	}
 
 	start(ownerKey: string) {
@@ -159,7 +159,7 @@ export class Room {
 		const cardsForPlayers = [...fieldCards].sort(() => 0.5 - Math.random());
 		for (let i = 0; i < playersAmongMembers.length; i++) {
 			players.push(new Player(playersAmongMembers[i].user, i+1, cardsForPlayers[i]));
-			this._server.to(playersAmongMembers[i].user.id).emit(SpyWSEvents.GET_CARD, cardsForPlayers[i]);
+			this.sendCardToUser(playersAmongMembers[i].user.id, cardsForPlayers[i]);
 		}
 		players = players.sort(() => 0.5 - Math.random());
 
@@ -180,7 +180,7 @@ export class Room {
 		this.sendActFlagToAll(false);
 		this.sendActFlagToUser(this.currentPlayer.user.id, true);
 		this.sendFieldCardsToAll();
-		this._server.to(this.currentPlayer.user.id).emit(SpyWSEvents.GET_ACT_CARD_IDS, this._state.field.getActCardIds(this.currentPlayer.card));
+		this.sendActCardIdsToUser(this.currentPlayer.user.id, this._state.field.getActCardIds(this.currentPlayer.card));
 		this.sendSizesToAll();
 		this.sendPlayersToAll();
 		this.sendTimerToAll();
@@ -219,32 +219,37 @@ export class Room {
 		this.sendPauseFlagToAll();
 	}
 
-	changeNickname(user: User, nickname: string): boolean {
-		if (this.isRunning) return false;
-		if (this._members.some(member => member.user.nickname === nickname)) return false;
+	changeNickname(user: User, nickname: string): string {
+		if (this.isRunning) return '';
+		while (this._members.some(member => member.user.nickname === nickname)) {
+			nickname += Room.ADDITIONAL_NICKNAME_CHAR;
+		}
 		user.nickname = nickname;
-		this.channel.emit(SpyWSEvents.GET_MEMBERS, this.membersPayload);
-		return true;
+		this.sendMembersToAll();
+		return nickname;
 	}
 
 	join(user: User): boolean {
     	this._logger.log(`User ${user.id} joining`);
-    	if (this._members.some(member => member.user.nickname === user.nickname)) {
+    	// Переименновываем пользователя при входе, если пользователь с таким ником уже есть в комнате
+    	const renamed = false;
+    	while (this._members.some(member => member.user.nickname === user.nickname)) {
     		user.nickname += Room.ADDITIONAL_NICKNAME_CHAR;
-    		this._server.to(user.id).emit(SpyWSEvents.GET_NICKNAME, { nickname: user.nickname, force: true });
 		}
-    	const member: Member = {
-			user,
-			isPlayer: false
-		};
+		if (renamed) this._server.to(user.id).emit(SpyWSEvents.GET_NICKNAME, { nickname: user.nickname, force: true });
+		// Добавляем пользователя с список пользователей в комнате
+		const member: Member = { user, isPlayer: false };
     	this._members.push(member);
+    	// Если при входе в комнату в ней ниткого не было, то пользователь становится владельцем комнаты
     	if (!this._owner) {
     	    this._owner = member;
     	    this._ownerKey = uuidv4();
 			this.sendOwnerKeyToUser(this._owner.user.id);
 			this.sendStartConditionFlagToUser(this._owner.user.id);
     	}
+    	// Подключаем пользователя к каналу комнаты
     	user.socket.join(this._id);
+    	// Далее отправляем пользователю данные из комнаты
     	this.sendOptionsToUser(user.id);
     	// Наличие this._state говорит о том, что игра хоть раз запускалась
     	if (this._state) {
@@ -252,24 +257,27 @@ export class Room {
 			this.sendFieldCardsToUser(user.id);
 			this.sendSizesToUser(user.id);
 			this.sendPlayersToUser(user.id);
-			this.sendLogsToUser(user.id);
+			// Если матч в комнате сейчас идёт
 			if (this.isRunning) {
 				this.sendRunningFlagToUser(user.id);
 				this.sendPauseFlagToUser(user.id);
 				this.sendTimerToUser(user.id);
+				// Проверяем, если пользователь переподключился к комнате
 				const player = this.checkRejoin(user);
 				if (player) {
 					member.isPlayer = true;
 					player.user = user;
+					// Проверяем, если пользователь сейчас ходит
 					if (this.currentPlayer === player) {
 						this.sendActFlagToUser(user.id, true);
-						this._server.to(user.id).emit(SpyWSEvents.GET_ACT_CARD_IDS, this._state.field.getActCardIds(this.currentPlayer.card));
-						this._server.to(user.id).emit(SpyWSEvents.GET_CARD, player.card);
+						this.sendActCardIdsToUser(user.id, this._state.field.getActCardIds(this.currentPlayer.card));
+						this.sendCardToUser(user.id, player.card);
 					}
 				}
 			}
+			this.sendLogsToUser(user.id);
 		}
-    	this.channel.emit(SpyWSEvents.GET_MEMBERS, this.membersPayload);
+    	this.sendMembersToAll();
     	this._logger.log(`User ${user.id} joined as spectator`);
     	return true;
 	}
@@ -292,7 +300,7 @@ export class Room {
 	private createAndApplyMovementLogRecord(movement: MovementDto, nickname: string, isTimeout?: boolean): LogRecord {
 		const logRecord: LogRecord = {
 			id: this._state.logs.length + 1,
-			text: `${isTimeout ? '(Тайм аут) ' : ''} Игрок "${nickname}" передвинул ${movement.id} ${movement.isRow ? 'строку' : 'столбец'} 
+			text: `${isTimeout ? '(Тайм аут) ' : ''} "${nickname}" передвинул ${movement.id} ${movement.isRow ? 'строку' : 'столбец'} 
 			${movement.isRow ? (movement.forward ? 'вправо' : 'влево') : (movement.forward ? 'вниз' : 'вверх')}`
 		};
 		this._state.logs.unshift(logRecord);
@@ -303,8 +311,8 @@ export class Room {
 	private createAndApplyCaptureLogRecord(card: FieldCard, nickname: string, capturedNickname?: string): LogRecord {
 		const logRecord: LogRecord = {
 			id: this._state.logs.length + 1,
-			text: capturedNickname ? `Игрок "${capturedNickname}", будучи картой "${card.title}", был пойман игроком ${nickname}`
-				: `Игрок "${nickname}" никого не поймал, указав на карту "${card.title}"`
+			text: capturedNickname ? `"${capturedNickname}", будучи "${card.title}", был пойман игроком ${nickname}`
+				: `"${nickname}" никого не поймал, указав на "${card.title}"`
 		};
 		this._state.logs.unshift(logRecord);
 		this.channel.emit(SpyWSEvents.GET_LOG_RECORD, logRecord);
@@ -314,7 +322,7 @@ export class Room {
 	private createAndApplyAskLogRecord(card: FieldCard, nickname: string, spiesCount: number): LogRecord {
 		const logRecord: LogRecord = {
 			id: this._state.logs.length + 1,
-			text: `Игрок "${nickname}" допросил карту "${card.title}" и узнал, что вблизи этой карты кроме него ${spiesCount === 0 ? 'никого нет' : `есть шпионы ${spiesCount}`}`
+			text: `"${nickname}" допросил "${card.title}" и ${spiesCount === 0 ? 'никого не нашёл' : `обнаружил шпионов (${spiesCount})`}`
 		};
 		this._state.logs.unshift(logRecord);
 		this.channel.emit(SpyWSEvents.GET_LOG_RECORD, logRecord);
@@ -326,7 +334,7 @@ export class Room {
 		this.nextCurrentPlayer();
 		this.sendActFlagToUser(this.currentPlayer.user.id, true);
 		this.sendFieldCardsToAll();
-		this._server.to(this.currentPlayer.user.id).emit(SpyWSEvents.GET_ACT_CARD_IDS, this._state.field.getActCardIds(this.currentPlayer.card));
+		this.sendActCardIdsToUser(this.currentPlayer.user.id, this._state.field.getActCardIds(this.currentPlayer.card));
 		this.sendPlayersToAll();
 		this._flow.checkout(this._timeoutAction, this._options.secondsToAct);
 		this.sendTimerToAll();
@@ -369,11 +377,12 @@ export class Room {
 		if (captured) {
 			this.currentPlayer.score += 1;
 			if (this.winCondition) {
+				this.sendPlayersToAll();
 				this.win();
 				return;
 			}
 			capturedPlayer.card = newCard;
-			this._server.to(capturedPlayer.user.id).emit(SpyWSEvents.GET_CARD, newCard);
+			this.sendCardToUser(capturedPlayer.user.id, newCard);
 		}
 		this.letNextPlayerToActAndLaunchTimer();
 	}
@@ -402,9 +411,11 @@ export class Room {
 			this._ownerKey = uuidv4();
 			this.sendOwnerKeyToUser(this._owner.user.id);
 			this.sendStartConditionFlagToUser(this._owner.user.id);
-    	}
+    	} else {
+			this.sendStartConditionFlagToUser(this._owner.user.id);
+		}
     	leavingUser.socket.leave(this._id);
-    	this.channel.emit(SpyWSEvents.GET_MEMBERS, this.membersPayload);
+    	this.sendMembersToAll();
     	this._logger.log(`User ${leavingUser.id} left`);
 	}
 
@@ -416,7 +427,7 @@ export class Room {
     	if (!member) return false;
     	member.isPlayer = becomePlayer;
     	this._logger.log(`User ${user?.id} became ${becomePlayer ? 'player' : 'spectator'}`);
-    	this.channel.emit(SpyWSEvents.GET_MEMBERS, this.membersPayload);
+    	this.sendMembersToAll();
 		this.sendStartConditionFlagToUser(this._owner.user.id);
 		return true;
 	}
@@ -430,6 +441,9 @@ export class Room {
 		if (this.isRunning || !user) return;
 		this.sendOptionsToUser(user.id);
 	}
+
+	private sendMembersToAll() { this.channel.emit(SpyWSEvents.GET_MEMBERS, this.membersPayload); }
+	private sendMembersToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_MEMBERS, this.membersPayload); }
 
 	private sendLogsToAll() { this.channel.emit(SpyWSEvents.GET_ALL_LOG_RECORDS, this._state.logs); }
 	private sendLogsToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_ALL_LOG_RECORDS, this._state.logs); }
@@ -464,4 +478,8 @@ export class Room {
 
 	private sendOptionsToAll() { this.channel.emit(SpyWSEvents.GET_ROOM_OPTIONS, this._options); }
 	private sendOptionsToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_ROOM_OPTIONS, this._options); }
+
+	private sendCardToUser(userId: string, card: FieldCard) { this._server.to(userId).emit(SpyWSEvents.GET_CARD, card); }
+
+	private sendActCardIdsToUser(userId: string, actCardIds: number[]) { this._server.to(userId).emit(SpyWSEvents.GET_ACT_CARD_IDS, actCardIds); }
 }
