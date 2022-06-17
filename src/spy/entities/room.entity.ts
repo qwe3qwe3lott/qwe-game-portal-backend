@@ -84,12 +84,12 @@ export class Room {
 	private static MAX_WIN_SCORE = 5;
 	private applyOptions(options: RoomOptions): void {
 		this._options = {
-			minPlayers: (options.minPlayers && options.minPlayers < Room.MAX_MIN_PLAYERS && options.minPlayers > Room.MIN_MIN_PLAYERS) ? options.minPlayers : 2,
-			maxPlayers: (options.maxPlayers && options.maxPlayers < Room.MAX_MAX_PLAYERS && options.maxPlayers > Room.MIN_MAX_PLAYERS) ? options.maxPlayers : 8,
-			rows: (options.rows && options.rows < Room.MAX_ROWS && options.rows > Room.MIN_ROWS) ? options.rows : 5,
-			columns: (options.columns && options.columns < Room.MAX_COLUMNS && options.columns > Room.MIN_COLUMNS) ? options.columns : 5,
-			secondsToAct: (options.secondsToAct && options.secondsToAct < Room.MAX_SECONDS_TO_ACT && options.secondsToAct > Room.MIN_SECONDS_TO_ACT) ? options.secondsToAct : 60,
-			winScore: (options.winScore && options.winScore < Room.MAX_WIN_SCORE && options.winScore > Room.MIN_WIN_SCORE) ? options.winScore : 3,
+			minPlayers: (options.minPlayers && options.minPlayers <= Room.MAX_MIN_PLAYERS && options.minPlayers >= Room.MIN_MIN_PLAYERS) ? options.minPlayers : 2,
+			maxPlayers: (options.maxPlayers && options.maxPlayers <= Room.MAX_MAX_PLAYERS && options.maxPlayers >= Room.MIN_MAX_PLAYERS) ? options.maxPlayers : 8,
+			rows: (options.rows && options.rows <= Room.MAX_ROWS && options.rows >= Room.MIN_ROWS) ? options.rows : 5,
+			columns: (options.columns && options.columns <= Room.MAX_COLUMNS && options.columns >= Room.MIN_COLUMNS) ? options.columns : 5,
+			secondsToAct: (options.secondsToAct && options.secondsToAct <= Room.MAX_SECONDS_TO_ACT && options.secondsToAct >= Room.MIN_SECONDS_TO_ACT) ? options.secondsToAct : 60,
+			winScore: (options.winScore && options.winScore <= Room.MAX_WIN_SCORE && options.winScore >= Room.MIN_WIN_SCORE) ? options.winScore : 3,
 			optionsOfCards: options.optionsOfCards ?? [
 				{ title: 'Radioactive', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Radioactive.jpg' },
 				{ title: 'Love', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Love.jpg' },
@@ -140,43 +140,54 @@ export class Room {
 		if (this.isRunning) return;
 		if (ownerKey !== this._ownerKey) return;
 		if (!this.conditionToStart) return;
-
-		if (this._options.columns * this._options.rows > this._options.optionsOfCards.length) return;
-		const randomSortedOptionsOfCards = [...this._options.optionsOfCards].sort(() => 0.5 - Math.random());
-
-		const fieldCards = Array<FieldCard>(this._options.columns * this._options.rows);
-		for (let i = 0; i < fieldCards.length; i++) {
-			fieldCards[i] = {
+		// Если кард будет нехватать для покрытия игрового поля, то будут использоваться заранее пойманные карты для заполнения пробелов
+		// Если кард будет больше чем можно выложить, будут выбраны случайные из доступных карт
+		const totalCards = this._options.columns * this._options.rows;
+		const optionsOfCards = totalCards < this._options.optionsOfCards.length ? [...this._options.optionsOfCards].sort(() => 0.5 - Math.random()) : this._options.optionsOfCards;
+		const fieldCards: FieldCard[] = [];
+		const totalCardsToAdd = Math.min(totalCards, optionsOfCards.length);
+		for (let i = 0; i < totalCardsToAdd; i++) {
+			fieldCards.push({
 				id: i+1,
-				title: randomSortedOptionsOfCards[i].title,
-				url: randomSortedOptionsOfCards[i].url,
+				title: optionsOfCards[i].title,
+				url: optionsOfCards[i].url,
 				captured: false
-			};
+			});
 		}
-
+		// Дозаполняем поле заранее пойманными картами, если необходимо
+		while (fieldCards.length < totalCards) {
+			fieldCards.push({
+				id: fieldCards.length+1,
+				title: '',
+				url: '',
+				captured: true
+			});
+		}
+		fieldCards.sort(() => 0.5 - Math.random());
+		// Формируем очередь из игроков в случайном порядке и случайно формируем порядок карт для выдачи игрокам
 		let players: Player[] = [];
 		const playersAmongMembers = this.playersAmongMembers;
-		const cardsForPlayers = [...fieldCards].sort(() => 0.5 - Math.random());
+		const cardsForPlayers = [...fieldCards.filter(card => !card.captured)].sort(() => 0.5 - Math.random());
 		for (let i = 0; i < playersAmongMembers.length; i++) {
 			players.push(new Player(playersAmongMembers[i].user, i+1, cardsForPlayers[i]));
 			this.sendCardToUser(playersAmongMembers[i].user.id, cardsForPlayers[i]);
 		}
 		players = players.sort(() => 0.5 - Math.random());
-
+		// Создаём игровое поле
 		const field = new Field(fieldCards,
 			{ columns: this._options.columns, rows: this._options.rows },
 			cardsForPlayers.slice(playersAmongMembers.length, cardsForPlayers.length));
-
+		// Создаём новое состояние для матча
 		this._state = {
 			players,
 			field,
 			logs: [],
 			winner: ''
 		};
-		//
+		// Запускаем поток событий
 		this._status = Status.IS_RUNNING;
 		this._flow.checkout(this._timeoutAction, this._options.secondsToAct);
-		//
+		// Отправляем данные пользователям
 		this.sendActFlagToAll(false);
 		this.sendActFlagToUser(this.currentPlayer.user.id, true);
 		this.sendFieldCardsToAll();
