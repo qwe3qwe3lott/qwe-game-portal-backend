@@ -119,7 +119,7 @@ export class Room {
 			]
 		};
 		if (this._options.minPlayers > this._options.maxPlayers) this._options.minPlayers = this._options.maxPlayers;
-		// TODO: Больше проверок
+		// TODO: Больше проверок, лучше проверять карты
 	}
 
 	private generateRandomMovement(): MovementDto {
@@ -298,6 +298,7 @@ export class Room {
 		if (this._ownerKey !== ownerKey) return false;
 		this.applyOptions(options);
 		this.sendOptionsToAll();
+		this.sendStartConditionFlagToUser(this._owner.user.id);
 		return true;
 	}
 
