@@ -46,6 +46,7 @@ export class SpyGateway {
 
 	@SubscribeMessage(SpyWSEvents.CHANGE_NICKNAME)
 	changeNickname(@MessageBody() nickname: string, @ConnectedSocket() socket: SocketWithData): string {
+		if (!nickname) return '';
 		return this.spyService.changeNickname(nickname, socket.data);
 	}
 
@@ -56,17 +57,20 @@ export class SpyGateway {
 
 	@SubscribeMessage(SpyWSEvents.CHECK_ROOM)
 	checkRoom(@MessageBody() roomId: string): boolean {
+		if (!roomId) return false;
 		return this.spyService.checkRoom(roomId);
 	}
 
 	@SubscribeMessage(SpyWSEvents.JOIN_ROOM)
 	joinRoom(@MessageBody() roomId: string, @ConnectedSocket() socket: SocketWithData): boolean {
+		if (!roomId) return false;
 		if (socket.data.roomId) return false;
 		return this.spyService.joinRoom(roomId, socket.data);
 	}
 
 	@SubscribeMessage(SpyWSEvents.BECOME)
 	become(@MessageBody() becomePlayer: boolean, @ConnectedSocket() socket: SocketWithData): boolean {
+		if (becomePlayer === undefined) return false;
 		return this.spyService.become(becomePlayer, socket.data);
 	}
 
@@ -78,26 +82,31 @@ export class SpyGateway {
 
 	@SubscribeMessage(SpyWSEvents.START_GAME)
 	startGame(@MessageBody() ownerKey: string, @ConnectedSocket() socket: SocketWithData): void {
+		if (!ownerKey) return;
 		this.spyService.startGame(ownerKey, socket.data);
 	}
 
 	@SubscribeMessage(SpyWSEvents.STOP_GAME)
 	stopGame(@MessageBody() ownerKey: string, @ConnectedSocket() socket: SocketWithData): void {
+		if (!ownerKey) return;
 		this.spyService.stopGame(ownerKey, socket.data);
 	}
 
 	@SubscribeMessage(SpyWSEvents.MOVE_CARDS)
 	moveCards(@MessageBody() movement: MovementDto, @ConnectedSocket() socket: SocketWithData): void {
+		if (!movement) return;
 		return this.spyService.moveCards(movement, socket.data);
 	}
 
 	@SubscribeMessage(SpyWSEvents.PAUSE_GAME)
 	pauseGame(@MessageBody() ownerKey: string, @ConnectedSocket() socket: SocketWithData): void {
+		if (!ownerKey) return;
 		return this.spyService.pauseGame(ownerKey, socket.data);
 	}
 
 	@SubscribeMessage(SpyWSEvents.RESUME_GAME)
 	resumeGame(@MessageBody() ownerKey: string, @ConnectedSocket() socket: SocketWithData): void {
+		if (!ownerKey) return;
 		return this.spyService.resumeGame(ownerKey, socket.data);
 	}
 
@@ -108,16 +117,19 @@ export class SpyGateway {
 
 	@SubscribeMessage(SpyWSEvents.CAPTURE_CARD)
 	captureCard(@MessageBody() cardId: number, @ConnectedSocket() socket: SocketWithData): void {
+		if (cardId === undefined) return;
 		return this.spyService.captureCard(cardId, socket.data);
 	}
 
 	@SubscribeMessage(SpyWSEvents.ASK_CARD)
 	askCard(@MessageBody() cardId: number, @ConnectedSocket() socket: SocketWithData): void {
+		if (cardId === undefined) return;
 		return this.spyService.askCard(cardId, socket.data);
 	}
 
 	@SubscribeMessage(SpyWSEvents.CHANGE_ROOM_OPTIONS)
 	changeRoomOptions(@MessageBody() optionsDto: OptionsDto, @ConnectedSocket() socket: SocketWithData): boolean {
+		if (!optionsDto) return false;
 		return this.spyService.changeRoomOptions(optionsDto, socket.data);
 	}
 

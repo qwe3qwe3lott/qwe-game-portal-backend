@@ -37,75 +37,46 @@ export class Field {
 	ask(card: FieldCard, cardsOfPlayer: FieldCard[]): number {
     	this.unmarkCards();
     	let spiesCount = 0;
-    	let cardIndex = this._cards.findIndex(c => c === card) - this._sizes.columns;
-		if (cardIndex >= 0) spiesCount += this.askRow(cardIndex, cardsOfPlayer);
-		cardIndex += this._sizes.columns;
-		spiesCount += this.askRow(cardIndex, cardsOfPlayer);
-		cardIndex += this._sizes.columns;
-		spiesCount += this.askRow(cardIndex, cardsOfPlayer);
-		if (spiesCount > 0) {
-			for (const markedCard of this._markedCards) {
-				markedCard.markAsked = true;
-			}
+    	const cardIndex = this._cards.findIndex(c => c === card);
+		const cardsAround = this.getCardsAround(cardIndex);
+		for (const card of cardsAround) {
+			if (cardsOfPlayer.some(playerCard => playerCard === card)) spiesCount++;
+		}
+		for (const card of cardsAround) {
+			card.markAsked = spiesCount > 0;
+			this._markedCards.push(card);
 		}
     	return spiesCount;
 	}
 
-	private askRow(cardIndex: number, cardsOfPlayer: FieldCard[]): number {
-    	let spiesCount = 0;
+	private getCardsAround(cardIndex: number): FieldCard[] {
+    	const cards: FieldCard[] = [];
+    	if (cardIndex - this._sizes.columns >= 0) cards.push(...this.getCardsInRow(cardIndex - this._sizes.columns));
+    	cards.push(...this.getCardsInRow(cardIndex));
+    	if (cardIndex + this._sizes.columns < this._sizes.columns * this._sizes.rows) cards.push(...this.getCardsInRow(cardIndex + this._sizes.columns));
+    	return cards;
+	}
+
+	private getCardsInRow(cardIndex: number): FieldCard[] {
+		const cards: FieldCard[] = [];
 		for (let i = (cardIndex % this._sizes.columns === 0 ? cardIndex : cardIndex-1);
 			 i <= (cardIndex % this._sizes.columns === this._sizes.columns-1 ? cardIndex : cardIndex+1);
 			 i++) {
-			if (this._cards[i]) {
-				if (this.askCard(i, cardsOfPlayer)) spiesCount++;
-				this._cards[i].markAsked = false;
-				this._markedCards.push(this._cards[i]);
-			}
+			if (this._cards[i]) cards.push(this._cards[i]);
 		}
-		return spiesCount;
-	}
-
-	private askCard(cardIndex: number, cardsOfPlayer: FieldCard[]): boolean {
-    	return cardsOfPlayer.some(playerCard => playerCard === this._cards[cardIndex]);
+		return cards;
 	}
 
 	getActCardIds(card: FieldCard): number[] {
-    	const ids: number[] = [];
-		let cardIndex = this._cards.findIndex(c => c === card) - this._sizes.columns;
-		if (cardIndex >= 0) ids.push(...this.getActCardIdsFromRow(cardIndex));
-		cardIndex += this._sizes.columns;
-		ids.push(...this.getActCardIdsFromRow(cardIndex));
-		cardIndex += this._sizes.columns;
-		ids.push(...this.getActCardIdsFromRow(cardIndex));
-		return ids;
-	}
-
-	getActCardIdsFromRow(cardIndex: number): number[] {
-    	const ids: number[] = [];
-		for (let i = (cardIndex % this._sizes.columns === 0 ? cardIndex : cardIndex-1);
-			 i <= (cardIndex % this._sizes.columns === this._sizes.columns-1 ? cardIndex : cardIndex+1);
-			 i++) {
-			if (this._cards[i]) ids.push(this._cards[i].id);
-		}
-		return ids;
+		const cardIndex = this._cards.findIndex(c => c === card);
+		const cardsAround = this.getCardsAround(cardIndex);
+		return cardsAround.map(card => card.id);
 	}
 
 	checkOpportunity(sourceCard: FieldCard, targetCard: FieldCard): boolean {
-		let cardIndex = this._cards.findIndex(card => card === sourceCard) - this._sizes.columns;
-		if (cardIndex >= 0 || this.checkOpportunityFromRow(cardIndex, targetCard)) return true;
-		cardIndex += this._sizes.columns;
-		if (this.checkOpportunityFromRow(cardIndex, targetCard)) return true;
-		cardIndex += this._sizes.columns;
-		if (this.checkOpportunityFromRow(cardIndex, targetCard)) return true;
-		return false;
-	}
-	checkOpportunityFromRow(cardIndex: number, targetCard: FieldCard): boolean {
-		for (let i = (cardIndex % this._sizes.columns === 0 ? cardIndex : cardIndex-1);
-			 i <= (cardIndex % this._sizes.columns === this._sizes.columns-1 ? cardIndex : cardIndex+1);
-			 i++) {
-			if (this._cards[i] === targetCard) return true;
-		}
-		return false;
+		const cardIndex = this._cards.findIndex(card => card === sourceCard);
+		const cardsAround = this.getCardsAround(cardIndex);
+		return cardsAround.some(card => card === targetCard);
 	}
 
 	// Двинуть столбец или строку на игровом поле

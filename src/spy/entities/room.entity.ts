@@ -13,6 +13,7 @@ import {randomElement} from '../util/random-element.util';
 import {MovementDto} from '../dto/movement.dto';
 import {Flow} from './flow.entity';
 import {LogRecord} from '../types/log-record.type';
+import {DeletableRoom} from '../interfaces/DeletableRoom';
 
 enum Status {
 	IDLE,
@@ -20,8 +21,9 @@ enum Status {
 	ON_PAUSE
 }
 
-export class Room {
+export class Room implements DeletableRoom {
 	private static ADDITIONAL_NICKNAME_CHAR = ')'
+	private _failedChecksCount: number
 	private _logger: Logger
 	private readonly _id: string; public get id() { return this._id; }
     private _ownerKey: string | null
@@ -53,6 +55,7 @@ export class Room {
 	private get cardsOfPlayers() { return this._state.players.map(player => player.card); }
 
 	constructor(server: Server, roomOptions: RoomOptions) {
+		this._failedChecksCount = 0;
     	this._id = uuidv4();
     	this._owner = null;
     	this._ownerKey = uuidv4();
@@ -68,6 +71,22 @@ export class Room {
 			this.createAndApplyMovementLogRecord(movement, this.currentPlayer.nickname, true);
 			this.letNextPlayerToActAndLaunchTimer();
 		};
+	}
+
+	checkActivity(): boolean {
+		return this._members.length > 0;
+	}
+
+	increaseFailedChecksCount(): number {
+		return ++this._failedChecksCount;
+	}
+
+	delete(): void {
+		// TODO: очистить комнату
+		if (this.isRunning) {
+			this._status = Status.IDLE;
+			this._flow.stop();
+		}
 	}
 
 	private static MIN_MIN_PLAYERS = 2;

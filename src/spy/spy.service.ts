@@ -1,4 +1,4 @@
-import {Injectable, Logger, OnModuleInit} from '@nestjs/common';
+import {Injectable, Logger} from '@nestjs/common';
 import {Room} from './entities/room.entity';
 import {Server} from 'socket.io';
 import {SocketData} from './types/socket-data.type';
@@ -6,15 +6,30 @@ import {User} from './types/user.type';
 import {MovementDto} from './dto/movement.dto';
 import {OptionsDto} from './dto/options.dto';
 import {RoomOptions} from './types/room-options.type';
+import { Interval } from '@nestjs/schedule';
+import {DeletableRoom} from './interfaces/DeletableRoom';
 
 @Injectable()
-export class SpyService implements OnModuleInit {
+export class SpyService {
+	private static SECONDS_BETWEEN_DELETES = 900;
+	private static FAILED_CHECKS_COUNT_TO_DELETE = 3;
 	private readonly logger: Logger = new Logger('SpyService');
 	private readonly _rooms: Room[] = []
 	private readonly _users: User[] = []
 
-	onModuleInit(): void {
-		this.logger.log('');
+	@Interval(SpyService.SECONDS_BETWEEN_DELETES * 1000)
+	deleteRooms(): void {
+		const roomsToDelete: DeletableRoom[] = [];
+		for (const room of this._rooms) {
+			if (room.checkActivity()) break;
+			if (room.increaseFailedChecksCount() >= SpyService.FAILED_CHECKS_COUNT_TO_DELETE) roomsToDelete.push(room);
+		}
+		for (const room of roomsToDelete) {
+			const roomIndex = this._rooms.findIndex(r => r === room);
+			if (roomIndex === -1) break;
+			this._rooms.splice(roomIndex, 1);
+			room.delete();
+		}
 	}
 
 	addUser(user: User) {
