@@ -301,8 +301,8 @@ export class Room implements DeletableRoom {
 					if (this.currentPlayer === player) {
 						this.sendActFlagToUser(user.id, true);
 						this.sendActCardIdsToUser(user.id, this._state.field.getActCardIds(this.currentPlayer.card));
-						this.sendCardToUser(user.id, player.card);
 					}
+					this.sendCardToUser(user.id, player.card);
 				}
 			}
 			this.sendLogsToUser(user.id);
