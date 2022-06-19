@@ -1,4 +1,4 @@
-export enum SpyWSEvents {
+export enum Events {
     CREATE_ROOM = 'createRoom',
     CHECK_ROOM = 'checkRoom',
     JOIN_ROOM = 'joinRoom',
@@ -18,8 +18,7 @@ export enum SpyWSEvents {
     GET_OWNER_KEY = 'getOwnerKey',
     GET_MEMBERS = 'getMembers',
     GET_NICKNAME = 'getNickname',
-    GET_RUNNING_FLAG = 'getRunningFlag',
-    GET_PAUSE_FLAG = 'getPauseFlag',
+    GET_ROOM_STATUS = 'getRoomStatus',
     GET_ACT_FLAG = 'getActFlag',
     GET_FIELD_CARDS = 'getFieldCards',
     GET_SIZES = 'getSizes',

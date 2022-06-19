@@ -1,7 +1,7 @@
 import {User} from '../types/user.type';
 import {v4 as uuidv4} from 'uuid';
 import {Server} from 'socket.io';
-import {SpyWSEvents} from '../enums/spy-ws-events.enum';
+import {Events} from '../enums/events.enum';
 import {Member} from '../types/member.type';
 import {Logger} from '@nestjs/common';
 import {RoomOptions} from '../types/room-options.type';
@@ -14,12 +14,7 @@ import {MovementDto} from '../dto/movement.dto';
 import {Flow} from './flow.entity';
 import {LogRecord} from '../types/log-record.type';
 import {DeletableRoom} from '../interfaces/DeletableRoom';
-
-enum Status {
-	IDLE,
-	IS_RUNNING,
-	ON_PAUSE
-}
+import {RoomStatuses} from '../enums/room-statuses.enum';
 
 export class Room implements DeletableRoom {
 	private static ADDITIONAL_NICKNAME_CHAR = ')'
@@ -38,9 +33,9 @@ export class Room implements DeletableRoom {
 	private _server: Server
 	private get channel() { return this._server.to(this._id); }
 	private _options: RoomOptions
-	private _status: Status
-	private get isRunning() { return this._status === Status.IS_RUNNING || this._status === Status.ON_PAUSE; }
-	private get isOnPause() { return this._status === Status.ON_PAUSE; }
+	private _status: RoomStatuses
+	private get isRunning() { return this._status === RoomStatuses.IS_RUNNING || this._status === RoomStatuses.ON_PAUSE; }
+	private get isOnPause() { return this._status === RoomStatuses.ON_PAUSE; }
 	private _state?: State
 	private get currentPlayer() { return this._state.players[0]; }
 	private get playersPayload() {
@@ -63,7 +58,7 @@ export class Room implements DeletableRoom {
     	this._members = [];
     	this._logger = new Logger(`Room ${this._id}`);
     	this.applyOptions(roomOptions);
-    	this._status = Status.IDLE;
+    	this._status = RoomStatuses.IDLE;
     	this._flow = new Flow();
     	this._timeoutAction = () => {
     		const movement = this.generateRandomMovement();
@@ -84,7 +79,7 @@ export class Room implements DeletableRoom {
 	delete(): void {
 		// TODO: очистить комнату
 		if (this.isRunning) {
-			this._status = Status.IDLE;
+			this._status = RoomStatuses.IDLE;
 			this._flow.stop();
 		}
 	}
@@ -204,7 +199,7 @@ export class Room implements DeletableRoom {
 			winner: ''
 		};
 		// Запускаем поток событий
-		this._status = Status.IS_RUNNING;
+		this._status = RoomStatuses.IS_RUNNING;
 		this._flow.checkout(this._timeoutAction, this._options.secondsToAct);
 		// Отправляем данные пользователям
 		this.sendActFlagToAll(false);
@@ -213,20 +208,21 @@ export class Room implements DeletableRoom {
 		this.sendActCardIdsToUser(this.currentPlayer.user.id, this._state.field.getActCardIds(this.currentPlayer.card));
 		this.sendSizesToAll();
 		this.sendPlayersToAll();
+		this.sendLogsToAll();
 		this.sendTimerToAll();
-		this.sendRunningFlagToAll();
+		this.sendRoomStatusToAll();
 	}
 
 	stop(ownerKey: string): void {
 		if (!this.isRunning) return;
 		if (ownerKey !== this._ownerKey) return;
 		//
-		this._status = Status.IDLE;
+		this._status = RoomStatuses.IDLE;
 		this._state.field.unmarkCards();
 		this.sendFieldCardsToAll();
 		this._flow.stop();
 		//
-		this.sendRunningFlagToAll();
+		this.sendRoomStatusToAll();
 	}
 
 	pause(ownerKey: string): void {
@@ -234,9 +230,9 @@ export class Room implements DeletableRoom {
 		if (ownerKey !== this._ownerKey) return;
 		this._flow.pause();
 
-		this._status = Status.ON_PAUSE;
+		this._status = RoomStatuses.ON_PAUSE;
 
-		this.sendPauseFlagToAll();
+		this.sendRoomStatusToAll();
 	}
 
 	resume(ownerKey: string): void {
@@ -244,9 +240,9 @@ export class Room implements DeletableRoom {
 		if (ownerKey !== this._ownerKey) return;
 		this._flow.resume();
 
-		this._status = Status.IS_RUNNING;
+		this._status = RoomStatuses.IS_RUNNING;
 
-		this.sendPauseFlagToAll();
+		this.sendRoomStatusToAll();
 	}
 
 	changeNickname(user: User, nickname: string): string {
@@ -266,7 +262,7 @@ export class Room implements DeletableRoom {
     	while (this._members.some(member => member.user.nickname === user.nickname)) {
     		user.nickname += Room.ADDITIONAL_NICKNAME_CHAR;
 		}
-		if (renamed) this._server.to(user.id).emit(SpyWSEvents.GET_NICKNAME, { nickname: user.nickname, force: true });
+		if (renamed) this._server.to(user.id).emit(Events.GET_NICKNAME, { nickname: user.nickname, force: true });
 		// Добавляем пользователя с список пользователей в комнате
 		const member: Member = { user, isPlayer: false };
     	this._members.push(member);
@@ -289,8 +285,7 @@ export class Room implements DeletableRoom {
 			this.sendPlayersToUser(user.id);
 			// Если матч в комнате сейчас идёт
 			if (this.isRunning) {
-				this.sendRunningFlagToUser(user.id);
-				this.sendPauseFlagToUser(user.id);
+				this.sendRoomStatusToUser(user.id);
 				this.sendTimerToUser(user.id);
 				// Проверяем, если пользователь переподключился к комнате
 				const player = this.checkRejoin(user);
@@ -335,7 +330,7 @@ export class Room implements DeletableRoom {
 			${movement.isRow ? (movement.forward ? 'вправо' : 'влево') : (movement.forward ? 'вниз' : 'вверх')}`
 		};
 		this._state.logs.unshift(logRecord);
-		this.channel.emit(SpyWSEvents.GET_LOG_RECORD, logRecord);
+		this.channel.emit(Events.GET_LOG_RECORD, logRecord);
 		return logRecord;
 	}
 
@@ -346,7 +341,7 @@ export class Room implements DeletableRoom {
 				: `"${nickname}" никого не поймал, указав на "${card.title}"`
 		};
 		this._state.logs.unshift(logRecord);
-		this.channel.emit(SpyWSEvents.GET_LOG_RECORD, logRecord);
+		this.channel.emit(Events.GET_LOG_RECORD, logRecord);
 		return logRecord;
 	}
 
@@ -356,7 +351,7 @@ export class Room implements DeletableRoom {
 			text: `"${nickname}" допросил "${card.title}" и ${spiesCount === 0 ? 'никого не нашёл' : `обнаружил шпионов (${spiesCount})`}`
 		};
 		this._state.logs.unshift(logRecord);
-		this.channel.emit(SpyWSEvents.GET_LOG_RECORD, logRecord);
+		this.channel.emit(Events.GET_LOG_RECORD, logRecord);
 		return logRecord;
 	}
 
@@ -385,9 +380,9 @@ export class Room implements DeletableRoom {
 	}
 
 	private win(): void {
-		this._status = Status.IDLE;
+		this._status = RoomStatuses.IDLE;
 		this._flow.stop();
-		this.sendRunningFlagToAll();
+		this.sendRoomStatusToAll();
 		this._state.winner = this.currentPlayer.nickname;
 		this.sendLastWinnerToAll();
 		this._state.field.unmarkCards();
@@ -473,44 +468,41 @@ export class Room implements DeletableRoom {
 		this.sendOptionsToUser(user.id);
 	}
 
-	private sendMembersToAll() { this.channel.emit(SpyWSEvents.GET_MEMBERS, this.membersPayload); }
-	private sendMembersToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_MEMBERS, this.membersPayload); }
+	private sendMembersToAll() { this.channel.emit(Events.GET_MEMBERS, this.membersPayload); }
+	private sendMembersToUser(userId: string) { this._server.to(userId).emit(Events.GET_MEMBERS, this.membersPayload); }
 
-	private sendLogsToAll() { this.channel.emit(SpyWSEvents.GET_ALL_LOG_RECORDS, this._state.logs); }
-	private sendLogsToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_ALL_LOG_RECORDS, this._state.logs); }
+	private sendLogsToAll() { this.channel.emit(Events.GET_ALL_LOG_RECORDS, this._state.logs); }
+	private sendLogsToUser(userId: string) { this._server.to(userId).emit(Events.GET_ALL_LOG_RECORDS, this._state.logs); }
 
-	private sendLastWinnerToAll() { this.channel.emit(SpyWSEvents.GET_LAST_WINNER, this._state.winner); }
-	private sendLastWinnerToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_LAST_WINNER, this._state.winner); }
+	private sendLastWinnerToAll() { this.channel.emit(Events.GET_LAST_WINNER, this._state.winner); }
+	private sendLastWinnerToUser(userId: string) { this._server.to(userId).emit(Events.GET_LAST_WINNER, this._state.winner); }
 
-	private sendFieldCardsToAll() { this.channel.emit(SpyWSEvents.GET_FIELD_CARDS, this._state.field.cards); }
-	private sendFieldCardsToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_FIELD_CARDS, this._state.field.cards); }
+	private sendFieldCardsToAll() { this.channel.emit(Events.GET_FIELD_CARDS, this._state.field.cards); }
+	private sendFieldCardsToUser(userId: string) { this._server.to(userId).emit(Events.GET_FIELD_CARDS, this._state.field.cards); }
 
-	private sendSizesToAll() { this.channel.emit(SpyWSEvents.GET_SIZES, this._state.field.sizes); }
-	private sendSizesToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_SIZES, this._state.field.sizes); }
+	private sendSizesToAll() { this.channel.emit(Events.GET_SIZES, this._state.field.sizes); }
+	private sendSizesToUser(userId: string) { this._server.to(userId).emit(Events.GET_SIZES, this._state.field.sizes); }
 
-	private sendPlayersToAll() { this.channel.emit(SpyWSEvents.GET_PLAYERS, this.playersPayload); }
-	private sendPlayersToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_PLAYERS, this.playersPayload); }
+	private sendPlayersToAll() { this.channel.emit(Events.GET_PLAYERS, this.playersPayload); }
+	private sendPlayersToUser(userId: string) { this._server.to(userId).emit(Events.GET_PLAYERS, this.playersPayload); }
 
-	private sendTimerToAll() { this.channel.emit(SpyWSEvents.GET_TIMER, this._flow.timer); }
-	private sendTimerToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_TIMER, this._flow.timer); }
+	private sendTimerToAll() { this.channel.emit(Events.GET_TIMER, this._flow.timer); }
+	private sendTimerToUser(userId: string) { this._server.to(userId).emit(Events.GET_TIMER, this._flow.timer); }
 
-	private sendRunningFlagToAll() { this.channel.emit(SpyWSEvents.GET_RUNNING_FLAG, this.isRunning); }
-	private sendRunningFlagToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_RUNNING_FLAG, this.isRunning); }
+	private sendRoomStatusToAll() { this.channel.emit(Events.GET_ROOM_STATUS, this._status); }
+	private sendRoomStatusToUser(userId: string) { this._server.to(userId).emit(Events.GET_ROOM_STATUS, this._status); }
 
-	private sendPauseFlagToAll() { this.channel.emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause); }
-	private sendPauseFlagToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_PAUSE_FLAG, this.isOnPause); }
+	private sendActFlagToAll(flag: boolean) { this.channel.emit(Events.GET_ACT_FLAG, flag); }
+	private sendActFlagToUser(userId: string, flag: boolean) { this._server.to(userId).emit(Events.GET_ACT_FLAG, flag); }
 
-	private sendActFlagToAll(flag: boolean) { this.channel.emit(SpyWSEvents.GET_ACT_FLAG, flag); }
-	private sendActFlagToUser(userId: string, flag: boolean) { this._server.to(userId).emit(SpyWSEvents.GET_ACT_FLAG, flag); }
+	private sendStartConditionFlagToUser(userId: string) { this._server.to(userId).emit(Events.GET_START_CONDITION_FLAG, this.conditionToStart); }
 
-	private sendStartConditionFlagToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_START_CONDITION_FLAG, this.conditionToStart); }
+	private sendOwnerKeyToUser(userId: string) { this._server.to(userId).emit(Events.GET_OWNER_KEY, this._ownerKey); }
 
-	private sendOwnerKeyToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_OWNER_KEY, this._ownerKey); }
+	private sendOptionsToAll() { this.channel.emit(Events.GET_ROOM_OPTIONS, this._options); }
+	private sendOptionsToUser(userId: string) { this._server.to(userId).emit(Events.GET_ROOM_OPTIONS, this._options); }
 
-	private sendOptionsToAll() { this.channel.emit(SpyWSEvents.GET_ROOM_OPTIONS, this._options); }
-	private sendOptionsToUser(userId: string) { this._server.to(userId).emit(SpyWSEvents.GET_ROOM_OPTIONS, this._options); }
+	private sendCardToUser(userId: string, card: FieldCard) { this._server.to(userId).emit(Events.GET_CARD, card); }
 
-	private sendCardToUser(userId: string, card: FieldCard) { this._server.to(userId).emit(SpyWSEvents.GET_CARD, card); }
-
-	private sendActCardIdsToUser(userId: string, actCardIds: number[]) { this._server.to(userId).emit(SpyWSEvents.GET_ACT_CARD_IDS, actCardIds); }
+	private sendActCardIdsToUser(userId: string, actCardIds: number[]) { this._server.to(userId).emit(Events.GET_ACT_CARD_IDS, actCardIds); }
 }

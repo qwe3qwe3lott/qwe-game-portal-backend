@@ -2,10 +2,9 @@ import {ConnectedSocket, MessageBody, SubscribeMessage, WebSocketGateway, WebSoc
 import {SpyService} from './spy.service';
 import {Server} from 'socket.io';
 import {Logger} from '@nestjs/common';
-import {SpyWSEvents} from './enums/spy-ws-events.enum';
+import {Events} from './enums/events.enum';
 import {SocketWithData} from './types/socket-with-data.type';
 import {User} from './types/user.type';
-import {generateNickname} from './util/generate-nickname.util';
 import {MovementDto} from './dto/movement.dto';
 import {OptionsDto} from './dto/options.dto';
 import {RoomOptions} from './types/room-options.type';
@@ -24,7 +23,7 @@ export class SpyGateway {
 	constructor(private readonly spyService: SpyService) {}
 
 	handleConnection(socket: SocketWithData) {
-		const nickname = generateNickname();
+		const nickname = `User ${socket.id.substring(0, 6)}`;
 		const user: User = {
 			id: socket.id,
 			socket,
@@ -36,7 +35,7 @@ export class SpyGateway {
 		};
 		this.logger.log('in ' + socket.id);
 		this.spyService.addUser(user);
-		socket.emit(SpyWSEvents.GET_NICKNAME, { nickname, force: false });
+		socket.emit(Events.GET_NICKNAME, { nickname, force: false });
 	}
 
 	handleDisconnect(socket: SocketWithData) {
@@ -44,96 +43,96 @@ export class SpyGateway {
 		this.logger.log('out ' + socket.data.userId);
 	}
 
-	@SubscribeMessage(SpyWSEvents.CHANGE_NICKNAME)
+	@SubscribeMessage(Events.CHANGE_NICKNAME)
 	changeNickname(@MessageBody() nickname: string, @ConnectedSocket() socket: SocketWithData): string {
 		if (!nickname) return '';
 		return this.spyService.changeNickname(nickname, socket.data);
 	}
 
-	@SubscribeMessage(SpyWSEvents.CREATE_ROOM)
+	@SubscribeMessage(Events.CREATE_ROOM)
 	createRoom(@MessageBody() roomOptions: RoomOptions): string {
 		return this.spyService.createRoom(this.server, roomOptions);
 	}
 
-	@SubscribeMessage(SpyWSEvents.CHECK_ROOM)
+	@SubscribeMessage(Events.CHECK_ROOM)
 	checkRoom(@MessageBody() roomId: string): boolean {
 		if (!roomId) return false;
 		return this.spyService.checkRoom(roomId);
 	}
 
-	@SubscribeMessage(SpyWSEvents.JOIN_ROOM)
+	@SubscribeMessage(Events.JOIN_ROOM)
 	joinRoom(@MessageBody() roomId: string, @ConnectedSocket() socket: SocketWithData): boolean {
 		if (!roomId) return false;
 		if (socket.data.roomId) return false;
 		return this.spyService.joinRoom(roomId, socket.data);
 	}
 
-	@SubscribeMessage(SpyWSEvents.BECOME)
+	@SubscribeMessage(Events.BECOME)
 	become(@MessageBody() becomePlayer: boolean, @ConnectedSocket() socket: SocketWithData): boolean {
 		if (becomePlayer === undefined) return false;
 		return this.spyService.become(becomePlayer, socket.data);
 	}
 
-	@SubscribeMessage(SpyWSEvents.LEAVE_ROOM)
+	@SubscribeMessage(Events.LEAVE_ROOM)
 	laveRoom(@ConnectedSocket() socket: SocketWithData): boolean {
 		this.spyService.leaveRoom(socket.data);
 		return true;
 	}
 
-	@SubscribeMessage(SpyWSEvents.START_GAME)
+	@SubscribeMessage(Events.START_GAME)
 	startGame(@MessageBody() ownerKey: string, @ConnectedSocket() socket: SocketWithData): void {
 		if (!ownerKey) return;
 		this.spyService.startGame(ownerKey, socket.data);
 	}
 
-	@SubscribeMessage(SpyWSEvents.STOP_GAME)
+	@SubscribeMessage(Events.STOP_GAME)
 	stopGame(@MessageBody() ownerKey: string, @ConnectedSocket() socket: SocketWithData): void {
 		if (!ownerKey) return;
 		this.spyService.stopGame(ownerKey, socket.data);
 	}
 
-	@SubscribeMessage(SpyWSEvents.MOVE_CARDS)
+	@SubscribeMessage(Events.MOVE_CARDS)
 	moveCards(@MessageBody() movement: MovementDto, @ConnectedSocket() socket: SocketWithData): void {
 		if (!movement) return;
 		return this.spyService.moveCards(movement, socket.data);
 	}
 
-	@SubscribeMessage(SpyWSEvents.PAUSE_GAME)
+	@SubscribeMessage(Events.PAUSE_GAME)
 	pauseGame(@MessageBody() ownerKey: string, @ConnectedSocket() socket: SocketWithData): void {
 		if (!ownerKey) return;
 		return this.spyService.pauseGame(ownerKey, socket.data);
 	}
 
-	@SubscribeMessage(SpyWSEvents.RESUME_GAME)
+	@SubscribeMessage(Events.RESUME_GAME)
 	resumeGame(@MessageBody() ownerKey: string, @ConnectedSocket() socket: SocketWithData): void {
 		if (!ownerKey) return;
 		return this.spyService.resumeGame(ownerKey, socket.data);
 	}
 
-	@SubscribeMessage(SpyWSEvents.REQUEST_TIMER)
+	@SubscribeMessage(Events.REQUEST_TIMER)
 	requestTimer(@ConnectedSocket() socket: SocketWithData): void {
 		return this.spyService.requestTimer(socket.data);
 	}
 
-	@SubscribeMessage(SpyWSEvents.CAPTURE_CARD)
+	@SubscribeMessage(Events.CAPTURE_CARD)
 	captureCard(@MessageBody() cardId: number, @ConnectedSocket() socket: SocketWithData): void {
 		if (cardId === undefined) return;
 		return this.spyService.captureCard(cardId, socket.data);
 	}
 
-	@SubscribeMessage(SpyWSEvents.ASK_CARD)
+	@SubscribeMessage(Events.ASK_CARD)
 	askCard(@MessageBody() cardId: number, @ConnectedSocket() socket: SocketWithData): void {
 		if (cardId === undefined) return;
 		return this.spyService.askCard(cardId, socket.data);
 	}
 
-	@SubscribeMessage(SpyWSEvents.CHANGE_ROOM_OPTIONS)
+	@SubscribeMessage(Events.CHANGE_ROOM_OPTIONS)
 	changeRoomOptions(@MessageBody() optionsDto: OptionsDto, @ConnectedSocket() socket: SocketWithData): boolean {
 		if (!optionsDto) return false;
 		return this.spyService.changeRoomOptions(optionsDto, socket.data);
 	}
 
-	@SubscribeMessage(SpyWSEvents.REQUEST_ROOM_OPTIONS)
+	@SubscribeMessage(Events.REQUEST_ROOM_OPTIONS)
 	requestRoomOptions(@ConnectedSocket() socket: SocketWithData): void {
 		return this.spyService.requestRoomOptions(socket.data);
 	}
