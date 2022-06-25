@@ -7,7 +7,6 @@ import {SocketWithData} from './types/socket-with-data.type';
 import {User} from './types/user.type';
 import {MovementDto} from './dto/movement.dto';
 import {OptionsDto} from './dto/options.dto';
-import {RoomOptions} from './types/room-options.type';
 
 @WebSocketGateway({
 	namespace: 'spy',
@@ -50,8 +49,8 @@ export class SpyGateway {
 	}
 
 	@SubscribeMessage(Events.CREATE_ROOM)
-	createRoom(@MessageBody() roomOptions: RoomOptions): string {
-		return this.spyService.createRoom(this.server, roomOptions);
+	createRoom(): string {
+		return this.spyService.createRoom(this.server);
 	}
 
 	@SubscribeMessage(Events.CHECK_ROOM)

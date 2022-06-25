@@ -5,7 +5,6 @@ import {SocketData} from './types/socket-data.type';
 import {User} from './types/user.type';
 import {MovementDto} from './dto/movement.dto';
 import {OptionsDto} from './dto/options.dto';
-import {RoomOptions} from './types/room-options.type';
 import { Interval } from '@nestjs/schedule';
 import {DeletableRoom} from './interfaces/DeletableRoom';
 
@@ -47,8 +46,8 @@ export class SpyService {
 		this._users.splice(userId, 1);
 	}
 
-	createRoom(server: Server, roomOptions: RoomOptions): string {
-    	const room = new Room(server, roomOptions);
+	createRoom(server: Server): string {
+    	const room = new Room(server);
     	this._rooms.push(room);
     	this.logger.log(`Room ${room.id} created`);
     	return room.id;

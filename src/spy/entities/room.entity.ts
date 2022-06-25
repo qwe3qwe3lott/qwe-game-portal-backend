@@ -15,6 +15,7 @@ import {Flow} from './flow.entity';
 import {LogRecord} from '../types/log-record.type';
 import {DeletableRoom} from '../interfaces/DeletableRoom';
 import {RoomStatuses} from '../enums/room-statuses.enum';
+import {CardOptions} from '../types/card-option.type';
 
 export class Room implements DeletableRoom {
 	private static ADDITIONAL_NICKNAME_CHAR = ')'
@@ -49,7 +50,7 @@ export class Room implements DeletableRoom {
 	private readonly _timeoutAction: () => void
 	private get cardsOfPlayers() { return this._state.players.map(player => player.card); }
 
-	constructor(server: Server, roomOptions: RoomOptions) {
+	constructor(server: Server) {
 		this._failedChecksCount = 0;
     	this._id = uuidv4();
     	this._owner = null;
@@ -57,7 +58,7 @@ export class Room implements DeletableRoom {
     	this._server = server;
     	this._members = [];
     	this._logger = new Logger(`Room ${this._id}`);
-    	this.applyOptions(roomOptions);
+    	this.applyOptions(Room.getDefaultOptions());
     	this._status = RoomStatuses.IDLE;
     	this._flow = new Flow();
     	this._timeoutAction = () => {
@@ -96,6 +97,36 @@ export class Room implements DeletableRoom {
 	private static MAX_SECONDS_TO_ACT = 180;
 	private static MIN_WIN_SCORE = 1;
 	private static MAX_WIN_SCORE = 5;
+	private static getDefaultOptionsOfCards = (): CardOptions[] => ([
+		{ id: 1, title: 'Radioactive', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Radioactive.jpg' },
+		{ id: 2, title: 'Love', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Love.jpg' },
+		{ id: 3, title: 'Ghibli', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Ghibli.jpg' },
+		{ id: 4, title: 'Death', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Death.jpg' },
+		{ id: 5, title: 'Surreal', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Surreal.jpg' },
+		{ id: 6, title: 'Robots', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Robots.jpg' },
+		{ id: 7, title: 'No Style', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/NoStyle.jpg' },
+		{ id: 8, title: 'Wuhtercuhler', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Wuhtercuhler.jpg' },
+		{ id: 9, title: 'Provenance', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Provenance.jpg' },
+		{ id: 10, title: 'Moonwalker', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Moonwalker.jpg' },
+		{ id: 11, title: 'Blacklight', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Blacklight.jpg' },
+		{ id: 12, title: 'Rose Gold', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/RoseGold.jpg' },
+		{ id: 13, title: 'Steampunk', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Steampunk.jpg' },
+		{ id: 14, title: 'Fantasy Art', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/FantasyArt.jpg' },
+		{ id: 15, title: 'Vibrant', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Vibrant.jpg' },
+		{ id: 16, title: 'HD', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/HD.jpg' },
+		{ id: 17, title: 'Psychic', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Psychic.jpg' },
+		{ id: 18, title: 'Dark Fantasy', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/DarkFantasy.jpg' },
+		{ id: 19, title: 'Mystical', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Mystical.jpg' },
+		{ id: 20, title: 'Baroque', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Baroque.jpg' },
+		{ id: 21, title: 'Etching', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Etching.jpg' },
+		{ id: 22, title: 'S.Dali', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/S.Dali.jpg' },
+		{ id: 23, title: 'Psychedelic', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Psychedelic.jpg' },
+		{ id: 24, title: 'Synthwave', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Synthwave.jpg' },
+		{ id: 25, title: 'Ukiyoe', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Ukiyoe.jpg' }
+	])
+	private static getDefaultOptions = (): RoomOptions => ({
+		minPlayers: 2, maxPlayers: 8, rows: 5, columns: 5, secondsToAct: 60, winScore: 3, optionsOfCards: Room.getDefaultOptionsOfCards()
+	})
 	private applyOptions(options: RoomOptions): void {
 		this._options = {
 			minPlayers: (options.minPlayers && options.minPlayers <= Room.MAX_MIN_PLAYERS && options.minPlayers >= Room.MIN_MIN_PLAYERS) ? options.minPlayers : 2,
@@ -104,33 +135,7 @@ export class Room implements DeletableRoom {
 			columns: (options.columns && options.columns <= Room.MAX_COLUMNS && options.columns >= Room.MIN_COLUMNS) ? options.columns : 5,
 			secondsToAct: (options.secondsToAct && options.secondsToAct <= Room.MAX_SECONDS_TO_ACT && options.secondsToAct >= Room.MIN_SECONDS_TO_ACT) ? options.secondsToAct : 60,
 			winScore: (options.winScore && options.winScore <= Room.MAX_WIN_SCORE && options.winScore >= Room.MIN_WIN_SCORE) ? options.winScore : 3,
-			optionsOfCards: options.optionsOfCards ?? [
-				{ title: 'Radioactive', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Radioactive.jpg' },
-				{ title: 'Love', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Love.jpg' },
-				{ title: 'Ghibli', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Ghibli.jpg' },
-				{ title: 'Death', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Death.jpg' },
-				{ title: 'Surreal', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Surreal.jpg' },
-				{ title: 'Robots', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Robots.jpg' },
-				{ title: 'No Style', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/NoStyle.jpg' },
-				{ title: 'Wuhtercuhler', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Wuhtercuhler.jpg' },
-				{ title: 'Provenance', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Provenance.jpg' },
-				{ title: 'Moonwalker', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Moonwalker.jpg' },
-				{ title: 'Blacklight', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Blacklight.jpg' },
-				{ title: 'Rose Gold', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/RoseGold.jpg' },
-				{ title: 'Steampunk', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Steampunk.jpg' },
-				{ title: 'Fantasy Art', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/FantasyArt.jpg' },
-				{ title: 'Vibrant', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Vibrant.jpg' },
-				{ title: 'HD', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/HD.jpg' },
-				{ title: 'Psychic', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Psychic.jpg' },
-				{ title: 'Dark Fantasy', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/DarkFantasy.jpg' },
-				{ title: 'Mystical', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Mystical.jpg' },
-				{ title: 'Baroque', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Baroque.jpg' },
-				{ title: 'Etching', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Etching.jpg' },
-				{ title: 'S.Dali', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/S.Dali.jpg' },
-				{ title: 'Psychedelic', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Psychedelic.jpg' },
-				{ title: 'Synthwave', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Synthwave.jpg' },
-				{ title: 'Ukiyoe', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Ukiyoe.jpg' }
-			]
+			optionsOfCards: options.optionsOfCards ?? Room.getDefaultOptionsOfCards()
 		};
 		if (this._options.minPlayers > this._options.maxPlayers) this._options.minPlayers = this._options.maxPlayers;
 		// TODO: Больше проверок, лучше проверять карты
@@ -387,6 +392,7 @@ export class Room implements DeletableRoom {
 		this.sendLastWinnerToAll();
 		this._state.field.unmarkCards();
 		this.sendFieldCardsToAll();
+		this.sendStartConditionFlagToUser(this._owner.user.id);
 	}
 
 	captureCard(cardId: number, user: User): void {
