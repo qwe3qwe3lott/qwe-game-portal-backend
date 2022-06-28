@@ -7,6 +7,7 @@ import {MovementDto} from './dto/movement.dto';
 import {OptionsDto} from './dto/options.dto';
 import { Interval } from '@nestjs/schedule';
 import {DeletableRoom} from './interfaces/DeletableRoom';
+import {OptionsOfCardsDto} from './dto/options-of-cards.dto';
 
 @Injectable()
 export class SpyService {
@@ -172,11 +173,27 @@ export class SpyService {
 		return room.setOptions(optionsDto.options, optionsDto.ownerKey);
 	}
 
+	changeRoomOptionsOfCards(optionsOfCardsDto: OptionsOfCardsDto, socketData: SocketData): boolean {
+		if (!socketData.roomId) return false;
+		const room = this._rooms.find(room => room.id === socketData.roomId);
+		const user = this._users.find(user => user.id === socketData.userId);
+		if (!room || !user) return false;
+		return room.setOptionsOfCards(optionsOfCardsDto.optionsOfCards, optionsOfCardsDto.ownerKey);
+	}
+
 	requestRoomOptions(socketData: SocketData): void {
 		if (!socketData.roomId) return;
 		const room = this._rooms.find(room => room.id === socketData.roomId);
 		const user = this._users.find(user => user.id === socketData.userId);
 		if (!room || !user) return;
 		return room.requestOptions(user);
+	}
+
+	requestRoomOptionsOfCards(socketData: SocketData): void {
+		if (!socketData.roomId) return;
+		const room = this._rooms.find(room => room.id === socketData.roomId);
+		const user = this._users.find(user => user.id === socketData.userId);
+		if (!room || !user) return;
+		return room.requestOptionsOfCards(user);
 	}
 }

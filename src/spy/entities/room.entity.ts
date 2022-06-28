@@ -15,7 +15,7 @@ import {Flow} from './flow.entity';
 import {LogRecord} from '../types/log-record.type';
 import {DeletableRoom} from '../interfaces/DeletableRoom';
 import {RoomStatuses} from '../enums/room-statuses.enum';
-import {CardOptions} from '../types/card-option.type';
+import {CardOptions} from '../types/card-options.type';
 
 export class Room implements DeletableRoom {
 	private static ADDITIONAL_NICKNAME_CHAR = ')'
@@ -34,6 +34,7 @@ export class Room implements DeletableRoom {
 	private _server: Server
 	private get channel() { return this._server.to(this._id); }
 	private _options: RoomOptions
+	private _optionsOfCards: CardOptions[]
 	private _status: RoomStatuses
 	private get isRunning() { return this._status === RoomStatuses.IS_RUNNING || this._status === RoomStatuses.ON_PAUSE; }
 	private get isOnPause() { return this._status === RoomStatuses.ON_PAUSE; }
@@ -59,6 +60,7 @@ export class Room implements DeletableRoom {
     	this._members = [];
     	this._logger = new Logger(`Room ${this._id}`);
     	this.applyOptions(Room.getDefaultOptions());
+    	this.applyOptionsOfCards(Room.getDefaultOptionsOfCards());
     	this._status = RoomStatuses.IDLE;
     	this._flow = new Flow();
     	this._timeoutAction = () => {
@@ -125,7 +127,7 @@ export class Room implements DeletableRoom {
 		{ id: 25, title: 'Ukiyoe', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Ukiyoe.jpg' }
 	])
 	private static getDefaultOptions = (): RoomOptions => ({
-		minPlayers: 2, maxPlayers: 8, rows: 5, columns: 5, secondsToAct: 60, winScore: 3, optionsOfCards: Room.getDefaultOptionsOfCards()
+		minPlayers: 2, maxPlayers: 8, rows: 5, columns: 5, secondsToAct: 60, winScore: 3
 	})
 	private applyOptions(options: RoomOptions): void {
 		this._options = {
@@ -134,10 +136,16 @@ export class Room implements DeletableRoom {
 			rows: (options.rows && options.rows <= Room.MAX_ROWS && options.rows >= Room.MIN_ROWS) ? options.rows : 5,
 			columns: (options.columns && options.columns <= Room.MAX_COLUMNS && options.columns >= Room.MIN_COLUMNS) ? options.columns : 5,
 			secondsToAct: (options.secondsToAct && options.secondsToAct <= Room.MAX_SECONDS_TO_ACT && options.secondsToAct >= Room.MIN_SECONDS_TO_ACT) ? options.secondsToAct : 60,
-			winScore: (options.winScore && options.winScore <= Room.MAX_WIN_SCORE && options.winScore >= Room.MIN_WIN_SCORE) ? options.winScore : 3,
-			optionsOfCards: options.optionsOfCards ?? Room.getDefaultOptionsOfCards()
+			winScore: (options.winScore && options.winScore <= Room.MAX_WIN_SCORE && options.winScore >= Room.MIN_WIN_SCORE) ? options.winScore : 3
 		};
 		if (this._options.minPlayers > this._options.maxPlayers) this._options.minPlayers = this._options.maxPlayers;
+		// TODO: Больше проверок, лучше проверять карты
+	}
+	private applyOptionsOfCards(optionsOfCards: CardOptions[]): void {
+		for (let i = 0; i < optionsOfCards.length; i++) {
+			optionsOfCards[i].id = i+1;
+		}
+		this._optionsOfCards = optionsOfCards;
 		// TODO: Больше проверок, лучше проверять карты
 	}
 
@@ -162,7 +170,7 @@ export class Room implements DeletableRoom {
 		// Если кард будет нехватать для покрытия игрового поля, то будут использоваться заранее пойманные карты для заполнения пробелов
 		// Если кард будет больше чем можно выложить, будут выбраны случайные из доступных карт
 		const totalCards = this._options.columns * this._options.rows;
-		const optionsOfCards = totalCards < this._options.optionsOfCards.length ? [...this._options.optionsOfCards].sort(() => 0.5 - Math.random()) : this._options.optionsOfCards;
+		const optionsOfCards = totalCards < this._optionsOfCards.length ? [...this._optionsOfCards].sort(() => 0.5 - Math.random()) : this._optionsOfCards;
 		const fieldCards: FieldCard[] = [];
 		const totalCardsToAdd = Math.min(totalCards, optionsOfCards.length);
 		for (let i = 0; i < totalCardsToAdd; i++) {
@@ -282,6 +290,7 @@ export class Room implements DeletableRoom {
     	user.socket.join(this._id);
     	// Далее отправляем пользователю данные из комнаты
     	this.sendOptionsToUser(user.id);
+    	this.sendOptionsOfCardsToUser(user.id);
     	// Наличие this._state говорит о том, что игра хоть раз запускалась
     	if (this._state) {
     		if (this._state.winner) this.sendLastWinnerToUser(user.id);
@@ -318,6 +327,14 @@ export class Room implements DeletableRoom {
 		this.applyOptions(options);
 		this.sendOptionsToAll();
 		this.sendStartConditionFlagToUser(this._owner.user.id);
+		return true;
+	}
+
+	setOptionsOfCards(optionsOfCards: CardOptions[], ownerKey: string): boolean {
+		if (this.isRunning) return false;
+		if (this._ownerKey !== ownerKey) return false;
+		this.applyOptionsOfCards(optionsOfCards);
+		this.sendOptionsOfCardsToAll();
 		return true;
 	}
 
@@ -470,8 +487,13 @@ export class Room implements DeletableRoom {
 	}
 
 	requestOptions(user: User): void {
-		if (this.isRunning || !user) return;
+		if (!user) return;
 		this.sendOptionsToUser(user.id);
+	}
+
+	requestOptionsOfCards(user: User): void {
+		if (!user) return;
+		this.sendOptionsOfCardsToUser(user.id);
 	}
 
 	private sendMembersToAll() { this.channel.emit(Events.GET_MEMBERS, this.membersPayload); }
@@ -507,6 +529,9 @@ export class Room implements DeletableRoom {
 
 	private sendOptionsToAll() { this.channel.emit(Events.GET_ROOM_OPTIONS, this._options); }
 	private sendOptionsToUser(userId: string) { this._server.to(userId).emit(Events.GET_ROOM_OPTIONS, this._options); }
+
+	private sendOptionsOfCardsToAll() { this.channel.emit(Events.GET_ROOM_OPTIONS_OF_CARDS, this._optionsOfCards); }
+	private sendOptionsOfCardsToUser(userId: string) { this._server.to(userId).emit(Events.GET_ROOM_OPTIONS_OF_CARDS, this._optionsOfCards); }
 
 	private sendCardToUser(userId: string, card: FieldCard) { this._server.to(userId).emit(Events.GET_CARD, card); }
 

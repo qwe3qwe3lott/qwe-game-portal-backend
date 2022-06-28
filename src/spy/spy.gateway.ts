@@ -7,6 +7,7 @@ import {SocketWithData} from './types/socket-with-data.type';
 import {User} from './types/user.type';
 import {MovementDto} from './dto/movement.dto';
 import {OptionsDto} from './dto/options.dto';
+import {OptionsOfCardsDto} from './dto/options-of-cards.dto';
 
 @WebSocketGateway({
 	namespace: 'spy',
@@ -131,8 +132,19 @@ export class SpyGateway {
 		return this.spyService.changeRoomOptions(optionsDto, socket.data);
 	}
 
+	@SubscribeMessage(Events.CHANGE_ROOM_OPTIONS_OF_CARDS)
+	changeRoomOptionsOfCards(@MessageBody() optionsOfCardsDto: OptionsOfCardsDto, @ConnectedSocket() socket: SocketWithData): boolean {
+		if (!optionsOfCardsDto) return false;
+		return this.spyService.changeRoomOptionsOfCards(optionsOfCardsDto, socket.data);
+	}
+
 	@SubscribeMessage(Events.REQUEST_ROOM_OPTIONS)
 	requestRoomOptions(@ConnectedSocket() socket: SocketWithData): void {
 		return this.spyService.requestRoomOptions(socket.data);
+	}
+
+	@SubscribeMessage(Events.REQUEST_ROOM_OPTIONS_OF_CARDS)
+	requestRoomOptionsOfCards(@ConnectedSocket() socket: SocketWithData): void {
+		return this.spyService.requestRoomOptionsOfCards(socket.data);
 	}
 }
