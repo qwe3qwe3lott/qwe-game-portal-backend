@@ -25,7 +25,7 @@ export enum Events {
     GET_FIELD_CARDS = 'getFieldCards',
     GET_SIZES = 'getSizes',
     GET_PLAYERS = 'getPlayers',
-    GET_START_CONDITION_FLAG = 'getStartConditionFlag',
+    GET_RESTRICTIONS_TO_START = 'getRestrictionsToStart',
     GET_TIMER = 'getTimer',
     GET_CARD = 'getCard',
     GET_ALL_LOG_RECORDS = 'getAllLogRecords',

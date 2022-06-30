@@ -19,7 +19,6 @@ import {CardOptions} from '../types/card-options.type';
 
 export class Room implements DeletableRoom {
 	private static ADDITIONAL_NICKNAME_CHAR = ')'
-	private _failedChecksCount: number
 	private _logger: Logger
 	private readonly _id: string; public get id() { return this._id; }
     private _ownerKey: string | null
@@ -27,9 +26,17 @@ export class Room implements DeletableRoom {
     private _members: Member[]
     private get membersPayload() { return this._members.map(member => ({ isPlayer: member.isPlayer, nickname: member.user.nickname })); }
     private get playersAmongMembers() { return this._members.filter(member => member.isPlayer); }
-    private get conditionToStart() {
+    private get restrictionsToStart(): string[] {
+    	const restrictions: string[] = [];
     	const playersAmongMembersCount = this.playersAmongMembers.length;
-    	return playersAmongMembersCount >= this._options.minPlayers && playersAmongMembersCount <= this._options.maxPlayers;
+    	if (playersAmongMembersCount < this._options.minPlayers) restrictions.push('Недостаточно игроков');
+    	if (playersAmongMembersCount > this._options.maxPlayers) restrictions.push('Слишком много игроков');
+    	const cardsInField = Math.min(this._optionsOfCards.length, this._options.rows * this._options.columns);
+    	const cardsToPlay = this._options.winScore * this.playersAmongMembers.length;
+    	if (cardsToPlay > cardsInField) restrictions.push(`Карт в колоде (${this._optionsOfCards.length}) или размера поля (${this._options.columns}x${this._options.rows}) 
+    	не хватит для текущего количества игроков (${this.playersAmongMembers.length}) и цели (${this._options.winScore}). Количество карт, которые нужно разложить 
+    	на поле: ${cardsToPlay}`);
+    	return restrictions;
     }
 	private _server: Server
 	private get channel() { return this._server.to(this._id); }
@@ -71,14 +78,10 @@ export class Room implements DeletableRoom {
 		};
 	}
 
-	checkActivity(): boolean {
-		return this._members.length > 0;
-	}
-
-	increaseFailedChecksCount(): number {
-		return ++this._failedChecksCount;
-	}
-
+	// Набор полей и методов для автоматического удаления неиспользуемых комнат
+	private _failedChecksCount: number
+	checkActivity(): boolean { return this._members.length > 0; }
+	increaseFailedChecksCount(): number { return ++this._failedChecksCount; }
 	delete(): void {
 		// TODO: очистить комнату
 		if (this.isRunning) {
@@ -166,7 +169,7 @@ export class Room implements DeletableRoom {
 		// Проверка возможности старта игры
 		if (this.isRunning) return;
 		if (ownerKey !== this._ownerKey) return;
-		if (!this.conditionToStart) return;
+		if (this.restrictionsToStart.length > 0) return;
 		// Если кард будет нехватать для покрытия игрового поля, то будут использоваться заранее пойманные карты для заполнения пробелов
 		// Если кард будет больше чем можно выложить, будут выбраны случайные из доступных карт
 		const totalCards = this._options.columns * this._options.rows;
@@ -284,7 +287,7 @@ export class Room implements DeletableRoom {
     	    this._owner = member;
     	    this._ownerKey = uuidv4();
 			this.sendOwnerKeyToUser(this._owner.user.id);
-			this.sendStartConditionFlagToUser(this._owner.user.id);
+			this.sendRestrictionsToStartToUser(this._owner.user.id);
     	}
     	// Подключаем пользователя к каналу комнаты
     	user.socket.join(this._id);
@@ -326,7 +329,7 @@ export class Room implements DeletableRoom {
 		if (this._ownerKey !== ownerKey) return false;
 		this.applyOptions(options);
 		this.sendOptionsToAll();
-		this.sendStartConditionFlagToUser(this._owner.user.id);
+		this.sendRestrictionsToStartToUser(this._owner.user.id);
 		return true;
 	}
 
@@ -409,7 +412,7 @@ export class Room implements DeletableRoom {
 		this.sendLastWinnerToAll();
 		this._state.field.unmarkCards();
 		this.sendFieldCardsToAll();
-		this.sendStartConditionFlagToUser(this._owner.user.id);
+		this.sendRestrictionsToStartToUser(this._owner.user.id);
 	}
 
 	captureCard(cardId: number, user: User): void {
@@ -459,9 +462,9 @@ export class Room implements DeletableRoom {
 			this._owner = randomElement(this._members);
 			this._ownerKey = uuidv4();
 			this.sendOwnerKeyToUser(this._owner.user.id);
-			this.sendStartConditionFlagToUser(this._owner.user.id);
+			this.sendRestrictionsToStartToUser(this._owner.user.id);
     	} else {
-			this.sendStartConditionFlagToUser(this._owner.user.id);
+			this.sendRestrictionsToStartToUser(this._owner.user.id);
 		}
     	leavingUser.socket.leave(this._id);
     	this.sendMembersToAll();
@@ -477,7 +480,7 @@ export class Room implements DeletableRoom {
     	member.isPlayer = becomePlayer;
     	this._logger.log(`User ${user?.id} became ${becomePlayer ? 'player' : 'spectator'}`);
     	this.sendMembersToAll();
-		this.sendStartConditionFlagToUser(this._owner.user.id);
+		this.sendRestrictionsToStartToUser(this._owner.user.id);
 		return true;
 	}
 
@@ -523,7 +526,7 @@ export class Room implements DeletableRoom {
 	private sendActFlagToAll(flag: boolean) { this.channel.emit(Events.GET_ACT_FLAG, flag); }
 	private sendActFlagToUser(userId: string, flag: boolean) { this._server.to(userId).emit(Events.GET_ACT_FLAG, flag); }
 
-	private sendStartConditionFlagToUser(userId: string) { this._server.to(userId).emit(Events.GET_START_CONDITION_FLAG, this.conditionToStart); }
+	private sendRestrictionsToStartToUser(userId: string) { this._server.to(userId).emit(Events.GET_RESTRICTIONS_TO_START, this.restrictionsToStart); }
 
 	private sendOwnerKeyToUser(userId: string) { this._server.to(userId).emit(Events.GET_OWNER_KEY, this._ownerKey); }
 
