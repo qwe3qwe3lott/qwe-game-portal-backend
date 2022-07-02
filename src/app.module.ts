@@ -3,9 +3,10 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { SpyModule } from './spy/spy.module';
+import {YesntModule} from './yesnt/yesnt.module';
 
 @Module({
-	imports: [SpyModule, ScheduleModule.forRoot()],
+	imports: [SpyModule, YesntModule, ScheduleModule.forRoot()],
 	controllers: [AppController],
 	providers: [AppService]
 })

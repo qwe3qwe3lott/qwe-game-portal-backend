@@ -1,25 +1,28 @@
 import {Injectable, Logger} from '@nestjs/common';
 import {Room} from './entities/room.entity';
 import {Server} from 'socket.io';
-import {SocketData} from './types/socket-data.type';
-import {User} from './types/user.type';
+import {SocketData} from '../types/socket-data.type';
+import {User} from '../types/user.type';
 import {MovementDto} from './dto/movement.dto';
 import {OptionsDto} from './dto/options.dto';
 import { Interval } from '@nestjs/schedule';
-import {DeletableRoom} from './interfaces/DeletableRoom';
+import {IDeletableRoom} from '../interfaces/deletable-room.interface';
 import {OptionsOfCardsDto} from './dto/options-of-cards.dto';
+import {IGameService} from '../interfaces/game-service.interface';
+import {Events} from './enums/events.enum';
+import {SocketWithData} from '../types/socket-with-data.type';
 
 @Injectable()
-export class SpyService {
+export class SpyService implements IGameService {
 	private static SECONDS_BETWEEN_DELETES = 900;
 	private static FAILED_CHECKS_COUNT_TO_DELETE = 3;
-	private readonly logger: Logger = new Logger('SpyService');
+	private readonly _logger: Logger = new Logger('SpyService');
 	private readonly _rooms: Room[] = []
 	private readonly _users: User[] = []
 
 	@Interval(SpyService.SECONDS_BETWEEN_DELETES * 1000)
 	deleteRooms(): void {
-		const roomsToDelete: DeletableRoom[] = [];
+		const roomsToDelete: IDeletableRoom[] = [];
 		for (const room of this._rooms) {
 			if (room.checkActivity()) break;
 			if (room.increaseFailedChecksCount() >= SpyService.FAILED_CHECKS_COUNT_TO_DELETE) roomsToDelete.push(room);
@@ -32,25 +35,30 @@ export class SpyService {
 		}
 	}
 
-	addUser(user: User) {
+	addUser(socket: SocketWithData) {
+		const nickname = `User ${socket.id.substring(0, 6)}`;
+		const user: User = { id: socket.id, socket, nickname};
+		socket.data = { userId: socket.id, roomId: null };
 		this._users.push(user);
+		socket.emit(Events.GET_NICKNAME, { nickname, force: false });
+		this._logger.log('in ' + socket.id);
 	}
 
 	removeUser(socketData: SocketData) {
-		const userId = this._users.findIndex(user => user.id === socketData.userId);
-		if (userId === -1) return;
+		const userIndex = this._users.findIndex(user => user.id === socketData.userId);
+		if (userIndex === -1) return;
 		if (socketData.roomId) {
 			const room = this._rooms.find(room => room.id === socketData.roomId);
-			if (!room) return;
-			room.kick(this._users[userId]);
+			if (room) room.kick(this._users[userIndex]);
 		}
-		this._users.splice(userId, 1);
+		this._users.splice(userIndex, 1);
+		this._logger.log('out ' + socketData.userId);
 	}
 
 	createRoom(server: Server): string {
     	const room = new Room(server);
     	this._rooms.push(room);
-    	this.logger.log(`Room ${room.id} created`);
+    	this._logger.log(`Room ${room.id} created`);
     	return room.id;
 	}
 

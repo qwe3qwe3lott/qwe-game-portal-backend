@@ -1,32 +1,23 @@
-import {User} from '../types/user.type';
+import {User} from '../../types/user.type';
 import {v4 as uuidv4} from 'uuid';
 import {Server} from 'socket.io';
 import {Events} from '../enums/events.enum';
-import {Member} from '../types/member.type';
-import {Logger} from '@nestjs/common';
+import {Member} from '../../types/member.type';
 import {RoomOptions} from '../types/room-options.type';
 import {State} from '../types/state.type';
 import {Player} from './player.entity';
 import {FieldCard} from '../types/field-card.type';
 import {Field} from './field.entity';
-import {randomElement} from '../util/random-element.util';
+import {randomElement} from '../../util/random-element.util';
 import {MovementDto} from '../dto/movement.dto';
-import {Flow} from './flow.entity';
 import {LogRecord} from '../types/log-record.type';
-import {DeletableRoom} from '../interfaces/DeletableRoom';
 import {RoomStatuses} from '../enums/room-statuses.enum';
 import {CardOptions} from '../types/card-options.type';
+import {GameRoom} from '../../abstracts/game-room.abstract';
 
-export class Room implements DeletableRoom {
-	private static ADDITIONAL_NICKNAME_CHAR = ')'
-	private _logger: Logger
-	private readonly _id: string; public get id() { return this._id; }
-    private _ownerKey: string | null
-    private _owner: Member | null
-    private _members: Member[]
-    private get membersPayload() { return this._members.map(member => ({ isPlayer: member.isPlayer, nickname: member.user.nickname })); }
-    private get playersAmongMembers() { return this._members.filter(member => member.isPlayer); }
-    private get restrictionsToStart(): string[] {
+export class Room extends GameRoom<Player, State> {
+	private get membersPayload() { return this._members.map(member => ({ isPlayer: member.isPlayer, nickname: member.user.nickname })); }
+	private get restrictionsToStart(): string[] {
     	const restrictions: string[] = [];
     	const playersAmongMembersCount = this.playersAmongMembers.length;
     	if (playersAmongMembersCount < this._options.minPlayers) restrictions.push('Недостаточно игроков');
@@ -37,16 +28,12 @@ export class Room implements DeletableRoom {
     	не хватит для текущего количества игроков (${this.playersAmongMembers.length}) и цели (${this._options.winScore}). Количество карт, которые нужно разложить 
     	на поле: ${cardsToPlay}`);
     	return restrictions;
-    }
-	private _server: Server
-	private get channel() { return this._server.to(this._id); }
+	}
 	private _options: RoomOptions
 	private _optionsOfCards: CardOptions[]
 	private _status: RoomStatuses
-	private get isRunning() { return this._status === RoomStatuses.IS_RUNNING || this._status === RoomStatuses.ON_PAUSE; }
-	private get isOnPause() { return this._status === RoomStatuses.ON_PAUSE; }
-	private _state?: State
-	private get currentPlayer() { return this._state.players[0]; }
+	protected get isRunning() { return this._status === RoomStatuses.IS_RUNNING || this._status === RoomStatuses.ON_PAUSE; }
+	protected get isOnPause() { return this._status === RoomStatuses.ON_PAUSE; }
 	private get playersPayload() {
 		return this._state.players.map(player => ({
 			id: player.id,
@@ -54,34 +41,22 @@ export class Room implements DeletableRoom {
 			score: player.score
 		}));
 	}
-	private _flow: Flow
 	private readonly _timeoutAction: () => void
 	private get cardsOfPlayers() { return this._state.players.map(player => player.card); }
 
-	constructor(server: Server) {
-		this._failedChecksCount = 0;
-    	this._id = uuidv4();
-    	this._owner = null;
-    	this._ownerKey = uuidv4();
-    	this._server = server;
-    	this._members = [];
-    	this._logger = new Logger(`Room ${this._id}`);
+	public constructor(server: Server) {
+		super(server);
     	this.applyOptions(Room.getDefaultOptions());
     	this.applyOptionsOfCards(Room.getDefaultOptionsOfCards());
     	this._status = RoomStatuses.IDLE;
-    	this._flow = new Flow();
     	this._timeoutAction = () => {
-    		const movement = this.generateRandomMovement();
+    		const movement = Room.generateRandomMovement(this._options.rows, this._options.columns);
 			this._state.field.move(movement);
 			this.createAndApplyMovementLogRecord(movement, this.currentPlayer.nickname, true);
 			this.letNextPlayerToActAndLaunchTimer();
 		};
 	}
 
-	// Набор полей и методов для автоматического удаления неиспользуемых комнат
-	private _failedChecksCount: number
-	checkActivity(): boolean { return this._members.length > 0; }
-	increaseFailedChecksCount(): number { return ++this._failedChecksCount; }
 	delete(): void {
 		// TODO: очистить комнату
 		if (this.isRunning) {
@@ -152,20 +127,16 @@ export class Room implements DeletableRoom {
 		// TODO: Больше проверок, лучше проверять карты
 	}
 
-	private generateRandomMovement(): MovementDto {
+	private static generateRandomMovement(rows: number, columns: number): MovementDto {
 		const isRow = Math.random() < 0.5;
 		return {
 			isRow,
 			forward: Math.random() < 0.5,
-			id: Math.floor(Math.random() * (isRow ? this._options.rows : this._options.columns)) + 1
+			id: Math.floor(Math.random() * (isRow ? rows : columns)) + 1
 		};
 	}
 
-	private nextCurrentPlayer() {
-		this._state.players.push(this._state.players.shift());
-	}
-
-	start(ownerKey: string) {
+	public start(ownerKey: string): void {
 		// Проверка возможности старта игры
 		if (this.isRunning) return;
 		if (ownerKey !== this._ownerKey) return;
@@ -229,7 +200,7 @@ export class Room implements DeletableRoom {
 		this.sendRoomStatusToAll();
 	}
 
-	stop(ownerKey: string): void {
+	public stop(ownerKey: string): void {
 		if (!this.isRunning) return;
 		if (ownerKey !== this._ownerKey) return;
 		//
@@ -241,7 +212,7 @@ export class Room implements DeletableRoom {
 		this.sendRoomStatusToAll();
 	}
 
-	pause(ownerKey: string): void {
+	public pause(ownerKey: string): void {
 		if (!this.isRunning || this.isOnPause) return;
 		if (ownerKey !== this._ownerKey) return;
 		this._flow.pause();
@@ -251,7 +222,7 @@ export class Room implements DeletableRoom {
 		this.sendRoomStatusToAll();
 	}
 
-	resume(ownerKey: string): void {
+	public resume(ownerKey: string): void {
 		if (!this.isOnPause) return;
 		if (ownerKey !== this._ownerKey) return;
 		this._flow.resume();
@@ -261,17 +232,7 @@ export class Room implements DeletableRoom {
 		this.sendRoomStatusToAll();
 	}
 
-	changeNickname(user: User, nickname: string): string {
-		if (this.isRunning) return '';
-		while (this._members.some(member => member.user.nickname === nickname)) {
-			nickname += Room.ADDITIONAL_NICKNAME_CHAR;
-		}
-		user.nickname = nickname;
-		this.sendMembersToAll();
-		return nickname;
-	}
-
-	join(user: User): boolean {
+	public join(user: User): boolean {
     	this._logger.log(`User ${user.id} joining`);
     	// Переименновываем пользователя при входе, если пользователь с таким ником уже есть в комнате
     	const renamed = false;
@@ -324,7 +285,7 @@ export class Room implements DeletableRoom {
     	return true;
 	}
 
-	setOptions(options: RoomOptions, ownerKey: string): boolean {
+	public setOptions(options: RoomOptions, ownerKey: string): boolean {
 		if (this.isRunning) return false;
 		if (this._ownerKey !== ownerKey) return false;
 		this.applyOptions(options);
@@ -333,7 +294,7 @@ export class Room implements DeletableRoom {
 		return true;
 	}
 
-	setOptionsOfCards(optionsOfCards: CardOptions[], ownerKey: string): boolean {
+	public setOptionsOfCards(optionsOfCards: CardOptions[], ownerKey: string): boolean {
 		if (this.isRunning) return false;
 		if (this._ownerKey !== ownerKey) return false;
 		this.applyOptionsOfCards(optionsOfCards);
@@ -391,7 +352,7 @@ export class Room implements DeletableRoom {
 		this.sendTimerToAll();
 	}
 
-	moveCards(movement: MovementDto, user: User): void {
+	public moveCards(movement: MovementDto, user: User): void {
 		if (!this.isRunning || this.isOnPause) return;
 		if (!user) return;
 		if (user.id !== this.currentPlayer.user.id) return;
@@ -415,7 +376,7 @@ export class Room implements DeletableRoom {
 		this.sendRestrictionsToStartToUser(this._owner.user.id);
 	}
 
-	captureCard(cardId: number, user: User): void {
+	public captureCard(cardId: number, user: User): void {
 		if (!this.isRunning || this.isOnPause) return;
 		if (!user) return;
 		if (user.id !== this.currentPlayer.user.id) return;
@@ -439,7 +400,7 @@ export class Room implements DeletableRoom {
 		this.letNextPlayerToActAndLaunchTimer();
 	}
 
-	askCard(cardId: number, user: User): void {
+	public askCard(cardId: number, user: User): void {
 		if (!this.isRunning || this.isOnPause) return;
 		if (!user) return;
 		if (user.id !== this.currentPlayer.user.id) return;
@@ -451,7 +412,7 @@ export class Room implements DeletableRoom {
 		this.letNextPlayerToActAndLaunchTimer();
 	}
 
-	kick(leavingUser: User) {
+	public kick(leavingUser: User): void {
     	this._logger.log(`User ${leavingUser?.id} leaving`);
     	if (!leavingUser) return;
     	this._members = this._members.filter(member => member.user.id !== leavingUser.id);
@@ -471,7 +432,7 @@ export class Room implements DeletableRoom {
     	this._logger.log(`User ${leavingUser.id} left`);
 	}
 
-	become(user: User, becomePlayer: boolean): boolean {
+	public become(user: User, becomePlayer: boolean): boolean {
     	this._logger.log(`User ${user?.id} becoming ${becomePlayer ? 'player' : 'spectator'}`);
     	if (this.isRunning) return false;
     	if (!user) return false;
@@ -484,23 +445,23 @@ export class Room implements DeletableRoom {
 		return true;
 	}
 
-	requestTimer(user: User): void {
+	public requestTimer(user: User): void {
 		if (!this.isRunning || !user) return;
 		this.sendTimerToUser(user.id);
 	}
 
-	requestOptions(user: User): void {
+	public requestOptions(user: User): void {
 		if (!user) return;
 		this.sendOptionsToUser(user.id);
 	}
 
-	requestOptionsOfCards(user: User): void {
+	public requestOptionsOfCards(user: User): void {
 		if (!user) return;
 		this.sendOptionsOfCardsToUser(user.id);
 	}
 
-	private sendMembersToAll() { this.channel.emit(Events.GET_MEMBERS, this.membersPayload); }
-	private sendMembersToUser(userId: string) { this._server.to(userId).emit(Events.GET_MEMBERS, this.membersPayload); }
+	protected sendMembersToAll() { this.channel.emit(Events.GET_MEMBERS, this.membersPayload); }
+	protected sendMembersToUser(userId: string) { this._server.to(userId).emit(Events.GET_MEMBERS, this.membersPayload); }
 
 	private sendLogsToAll() { this.channel.emit(Events.GET_ALL_LOG_RECORDS, this._state.logs); }
 	private sendLogsToUser(userId: string) { this._server.to(userId).emit(Events.GET_ALL_LOG_RECORDS, this._state.logs); }

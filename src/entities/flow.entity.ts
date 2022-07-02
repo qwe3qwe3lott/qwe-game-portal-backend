@@ -20,7 +20,7 @@ export class Flow {
     	this._isPause = true;
 	}
 
-	checkout(action: () => void, delay: number) {
+	public checkout(action: () => void, delay: number) {
     	if (this._timeout) clearTimeout(this._timeout);
     	this._timeout = setTimeout(action, (delay + Flow.DELAY_BONUS) * 1000);
     	this._timeoutStartMoment = Date.now();
@@ -29,7 +29,7 @@ export class Flow {
     	this._isPause = false;
 	}
 
-	pause() {
+	public pause() {
     	if (this._timeout) {
     		this._leftTime = this._delay - (Date.now() - this._timeoutStartMoment);
     		clearTimeout(this._timeout);
@@ -38,7 +38,7 @@ export class Flow {
     	}
 	}
 
-	resume() {
+	public resume() {
     	if (!this._timeout && this._timeoutAction && this._leftTime) {
     		this._timeout = setTimeout(this._timeoutAction, this._leftTime);
     		this._delay = this._leftTime;
@@ -46,8 +46,8 @@ export class Flow {
 			this._isPause = false;
     	}
 	}
-    
-	stop() {
+
+	public stop() {
     	if (this._timeout){
     	    clearTimeout(this._timeout);
     	    this._timeout = undefined;
