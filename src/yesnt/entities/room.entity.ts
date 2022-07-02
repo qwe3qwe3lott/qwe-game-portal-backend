@@ -6,9 +6,8 @@ import {State} from '../types/state.type';
 
 
 export class Room extends GameRoom<Player, State> {
-	protected get isRunning(): boolean { return true; }
-	protected get isOnPause(): boolean { return true; }
-
+	protected get restrictionsToStart(): string[] { return []; }
+	protected get playersPayload() { return this._state.players.map(player => ({ id: player.id, nickname: player.nickname })); }
 	public constructor(server: Server) {
     	super(server);
 	}
@@ -23,7 +22,4 @@ export class Room extends GameRoom<Player, State> {
 	public join(user: User): boolean { console.log(user); return true; }
 	public become(user: User, becomePlayer: boolean): boolean { console.log(user); return becomePlayer; }
 	public kick(user: User): void { console.log(user); }
-
-	protected sendMembersToAll() { console.log(); }
-	protected sendMembersToUser(userId: string) { console.log(userId); }
 }

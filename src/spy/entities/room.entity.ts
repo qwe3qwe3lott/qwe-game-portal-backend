@@ -10,14 +10,13 @@ import {FieldCard} from '../types/field-card.type';
 import {Field} from './field.entity';
 import {randomElement} from '../../util/random-element.util';
 import {MovementDto} from '../dto/movement.dto';
-import {LogRecord} from '../types/log-record.type';
-import {RoomStatuses} from '../enums/room-statuses.enum';
+import {LogRecord} from '../../types/log-record.type';
+import {RoomStatuses} from '../../enums/room-statuses.enum';
 import {CardOptions} from '../types/card-options.type';
 import {GameRoom} from '../../abstracts/game-room.abstract';
 
 export class Room extends GameRoom<Player, State> {
-	private get membersPayload() { return this._members.map(member => ({ isPlayer: member.isPlayer, nickname: member.user.nickname })); }
-	private get restrictionsToStart(): string[] {
+	protected get restrictionsToStart(): string[] {
     	const restrictions: string[] = [];
     	const playersAmongMembersCount = this.playersAmongMembers.length;
     	if (playersAmongMembersCount < this._options.minPlayers) restrictions.push('Недостаточно игроков');
@@ -31,16 +30,7 @@ export class Room extends GameRoom<Player, State> {
 	}
 	private _options: RoomOptions
 	private _optionsOfCards: CardOptions[]
-	private _status: RoomStatuses
-	protected get isRunning() { return this._status === RoomStatuses.IS_RUNNING || this._status === RoomStatuses.ON_PAUSE; }
-	protected get isOnPause() { return this._status === RoomStatuses.ON_PAUSE; }
-	private get playersPayload() {
-		return this._state.players.map(player => ({
-			id: player.id,
-			nickname: player.nickname,
-			score: player.score
-		}));
-	}
+	protected get playersPayload() { return this._state.players.map(player => ({ id: player.id, nickname: player.nickname, score: player.score })); }
 	private readonly _timeoutAction: () => void
 	private get cardsOfPlayers() { return this._state.players.map(player => player.card); }
 
@@ -48,7 +38,6 @@ export class Room extends GameRoom<Player, State> {
 		super(server);
     	this.applyOptions(Room.getDefaultOptions());
     	this.applyOptionsOfCards(Room.getDefaultOptionsOfCards());
-    	this._status = RoomStatuses.IDLE;
     	this._timeoutAction = () => {
     		const movement = Room.generateRandomMovement(this._options.rows, this._options.columns);
 			this._state.field.move(movement);
@@ -65,18 +54,18 @@ export class Room extends GameRoom<Player, State> {
 		}
 	}
 
-	private static MIN_MIN_PLAYERS = 2;
-	private static MAX_MIN_PLAYERS = 8;
-	private static MIN_MAX_PLAYERS = 2;
-	private static MAX_MAX_PLAYERS = 8;
-	private static MIN_ROWS = 3;
-	private static MAX_ROWS = 7;
-	private static MIN_COLUMNS = 3;
-	private static MAX_COLUMNS = 7;
-	private static MIN_SECONDS_TO_ACT = 15;
-	private static MAX_SECONDS_TO_ACT = 180;
-	private static MIN_WIN_SCORE = 1;
-	private static MAX_WIN_SCORE = 5;
+	private static readonly MIN_MIN_PLAYERS = 2;
+	private static readonly MAX_MIN_PLAYERS = 8;
+	private static readonly MIN_MAX_PLAYERS = 2;
+	private static readonly MAX_MAX_PLAYERS = 8;
+	private static readonly MIN_ROWS = 3;
+	private static readonly MAX_ROWS = 7;
+	private static readonly MIN_COLUMNS = 3;
+	private static readonly MAX_COLUMNS = 7;
+	private static readonly MIN_SECONDS_TO_ACT = 15;
+	private static readonly MAX_SECONDS_TO_ACT = 180;
+	private static readonly MIN_WIN_SCORE = 1;
+	private static readonly MAX_WIN_SCORE = 5;
 	private static getDefaultOptionsOfCards = (): CardOptions[] => ([
 		{ id: 1, title: 'Radioactive', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Radioactive.jpg' },
 		{ id: 2, title: 'Love', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Love.jpg' },
@@ -239,7 +228,7 @@ export class Room extends GameRoom<Player, State> {
     	while (this._members.some(member => member.user.nickname === user.nickname)) {
     		user.nickname += Room.ADDITIONAL_NICKNAME_CHAR;
 		}
-		if (renamed) this._server.to(user.id).emit(Events.GET_NICKNAME, { nickname: user.nickname, force: true });
+		if (renamed) this.sendNicknameToUser(user.id, user.nickname, true);
 		// Добавляем пользователя с список пользователей в комнате
 		const member: Member = { user, isPlayer: false };
     	this._members.push(member);
@@ -316,7 +305,7 @@ export class Room extends GameRoom<Player, State> {
 			${movement.isRow ? (movement.forward ? 'вправо' : 'влево') : (movement.forward ? 'вниз' : 'вверх')}`
 		};
 		this._state.logs.unshift(logRecord);
-		this.channel.emit(Events.GET_LOG_RECORD, logRecord);
+		this.sendLogRecordToAll(logRecord);
 		return logRecord;
 	}
 
@@ -327,7 +316,7 @@ export class Room extends GameRoom<Player, State> {
 				: `"${nickname}" никого не поймал, указав на "${card.title}"`
 		};
 		this._state.logs.unshift(logRecord);
-		this.channel.emit(Events.GET_LOG_RECORD, logRecord);
+		this.sendLogRecordToAll(logRecord);
 		return logRecord;
 	}
 
@@ -337,7 +326,7 @@ export class Room extends GameRoom<Player, State> {
 			text: `"${nickname}" допросил "${card.title}" и ${spiesCount === 0 ? 'никого не нашёл' : `обнаружил шпионов (${spiesCount})`}`
 		};
 		this._state.logs.unshift(logRecord);
-		this.channel.emit(Events.GET_LOG_RECORD, logRecord);
+		this.sendLogRecordToAll(logRecord);
 		return logRecord;
 	}
 
@@ -445,11 +434,6 @@ export class Room extends GameRoom<Player, State> {
 		return true;
 	}
 
-	public requestTimer(user: User): void {
-		if (!this.isRunning || !user) return;
-		this.sendTimerToUser(user.id);
-	}
-
 	public requestOptions(user: User): void {
 		if (!user) return;
 		this.sendOptionsToUser(user.id);
@@ -460,12 +444,6 @@ export class Room extends GameRoom<Player, State> {
 		this.sendOptionsOfCardsToUser(user.id);
 	}
 
-	protected sendMembersToAll() { this.channel.emit(Events.GET_MEMBERS, this.membersPayload); }
-	protected sendMembersToUser(userId: string) { this._server.to(userId).emit(Events.GET_MEMBERS, this.membersPayload); }
-
-	private sendLogsToAll() { this.channel.emit(Events.GET_ALL_LOG_RECORDS, this._state.logs); }
-	private sendLogsToUser(userId: string) { this._server.to(userId).emit(Events.GET_ALL_LOG_RECORDS, this._state.logs); }
-
 	private sendLastWinnerToAll() { this.channel.emit(Events.GET_LAST_WINNER, this._state.winner); }
 	private sendLastWinnerToUser(userId: string) { this._server.to(userId).emit(Events.GET_LAST_WINNER, this._state.winner); }
 
@@ -475,21 +453,6 @@ export class Room extends GameRoom<Player, State> {
 	private sendSizesToAll() { this.channel.emit(Events.GET_SIZES, this._state.field.sizes); }
 	private sendSizesToUser(userId: string) { this._server.to(userId).emit(Events.GET_SIZES, this._state.field.sizes); }
 
-	private sendPlayersToAll() { this.channel.emit(Events.GET_PLAYERS, this.playersPayload); }
-	private sendPlayersToUser(userId: string) { this._server.to(userId).emit(Events.GET_PLAYERS, this.playersPayload); }
-
-	private sendTimerToAll() { this.channel.emit(Events.GET_TIMER, this._flow.timer); }
-	private sendTimerToUser(userId: string) { this._server.to(userId).emit(Events.GET_TIMER, this._flow.timer); }
-
-	private sendRoomStatusToAll() { this.channel.emit(Events.GET_ROOM_STATUS, this._status); }
-	private sendRoomStatusToUser(userId: string) { this._server.to(userId).emit(Events.GET_ROOM_STATUS, this._status); }
-
-	private sendActFlagToAll(flag: boolean) { this.channel.emit(Events.GET_ACT_FLAG, flag); }
-	private sendActFlagToUser(userId: string, flag: boolean) { this._server.to(userId).emit(Events.GET_ACT_FLAG, flag); }
-
-	private sendRestrictionsToStartToUser(userId: string) { this._server.to(userId).emit(Events.GET_RESTRICTIONS_TO_START, this.restrictionsToStart); }
-
-	private sendOwnerKeyToUser(userId: string) { this._server.to(userId).emit(Events.GET_OWNER_KEY, this._ownerKey); }
 
 	private sendOptionsToAll() { this.channel.emit(Events.GET_ROOM_OPTIONS, this._options); }
 	private sendOptionsToUser(userId: string) { this._server.to(userId).emit(Events.GET_ROOM_OPTIONS, this._options); }
