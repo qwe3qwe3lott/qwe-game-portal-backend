@@ -270,6 +270,7 @@ export class Room extends GameRoom<Player, State> {
 			this.sendLogsToUser(user.id);
 		}
     	this.sendMembersToAll();
+		this.sendRestrictionsToStartToUser(this._owner.user.id);
     	this._logger.log(`User ${user.id} joined as spectator`);
     	return true;
 	}
