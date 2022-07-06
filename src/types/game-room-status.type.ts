@@ -1,0 +1,1 @@
+export type GameRoomStatus = 'idle' | 'run' | 'pause';

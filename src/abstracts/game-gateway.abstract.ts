@@ -6,8 +6,11 @@ import {GameService} from './game-service.abstract';
 import {GameRoom} from './game-room.abstract';
 import {GamePlayer} from './game-player.abstract';
 import {RoomState} from '../types/room-state.type';
+import {GameRoomStatus} from '../types/game-room-status.type';
+import {GameRoomOptions} from '../types/game-room-options.type';
+import {OptionsDto} from '../dto/options.dto';
 
-export abstract class GameGateway<S extends GameService<GameRoom<GamePlayer, RoomState<GamePlayer>>>> {
+export abstract class GameGateway<S extends GameService<GameRoom<GamePlayer, RoomState<GamePlayer>, GameRoomStatus, O>, O>, O extends GameRoomOptions> {
     @WebSocketServer()
     private _server: Server;
 
@@ -79,5 +82,16 @@ export abstract class GameGateway<S extends GameService<GameRoom<GamePlayer, Roo
     @SubscribeMessage(GameEvents.REQUEST_TIMER)
     requestTimer(@ConnectedSocket() socket: SocketWithData): void {
     	return this._service.requestTimer(socket.data);
+    }
+
+    @SubscribeMessage(GameEvents.CHANGE_ROOM_OPTIONS)
+    changeRoomOptions(@MessageBody() optionsDto: OptionsDto<O>, @ConnectedSocket() socket: SocketWithData): boolean {
+    	if (!optionsDto) return false;
+    	return this._service.changeRoomOptions(optionsDto, socket.data);
+    }
+
+    @SubscribeMessage(GameEvents.REQUEST_ROOM_OPTIONS)
+    requestRoomOptions(@ConnectedSocket() socket: SocketWithData): void {
+    	return this._service.requestRoomOptions(socket.data);
     }
 }

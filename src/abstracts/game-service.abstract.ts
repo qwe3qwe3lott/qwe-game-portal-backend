@@ -9,9 +9,12 @@ import {GameEvents} from '../enums/game-events.enum';
 import {GameRoom} from './game-room.abstract';
 import {GamePlayer} from './game-player.abstract';
 import {RoomState} from '../types/room-state.type';
+import {GameRoomStatus} from '../types/game-room-status.type';
+import {GameRoomOptions} from '../types/game-room-options.type';
+import {OptionsDto} from '../dto/options.dto';
 
 @Injectable()
-export abstract class GameService<R extends GameRoom<GamePlayer, RoomState<GamePlayer>>> {
+export abstract class GameService<R extends GameRoom<GamePlayer, RoomState<GamePlayer>, GameRoomStatus, O>, O extends GameRoomOptions> {
     private static readonly SECONDS_BETWEEN_DELETES = 900;
     private static readonly FAILED_CHECKS_COUNT_TO_DELETE = 3;
     protected readonly _logger: Logger
@@ -146,5 +149,21 @@ export abstract class GameService<R extends GameRoom<GamePlayer, RoomState<GameP
     	const user = this._users.find(user => user.id === socketData.userId);
     	if (!room || !user) return;
     	room.requestTimer(user);
+    }
+
+    changeRoomOptions(optionsDto: OptionsDto<O>, socketData: SocketData): boolean {
+    	if (!socketData.roomId) return false;
+    	const room = this._rooms.find(room => room.id === socketData.roomId);
+    	const user = this._users.find(user => user.id === socketData.userId);
+    	if (!room || !user) return false;
+    	return room.setOptions(optionsDto.options, optionsDto.ownerKey);
+    }
+
+    requestRoomOptions(socketData: SocketData): void {
+    	if (!socketData.roomId) return;
+    	const room = this._rooms.find(room => room.id === socketData.roomId);
+    	const user = this._users.find(user => user.id === socketData.userId);
+    	if (!room || !user) return;
+    	return room.requestOptions(user);
     }
 }

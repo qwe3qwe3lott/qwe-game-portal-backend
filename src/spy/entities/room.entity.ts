@@ -11,11 +11,11 @@ import {Field} from './field.entity';
 import {randomElement} from '../../util/random-element.util';
 import {MovementDto} from '../dto/movement.dto';
 import {LogRecord} from '../../types/log-record.type';
-import {RoomStatuses} from '../../enums/room-statuses.enum';
 import {CardOptions} from '../types/card-options.type';
 import {GameRoom} from '../../abstracts/game-room.abstract';
+import {RoomStatus} from '../types/room-status.type';
 
-export class Room extends GameRoom<Player, State> {
+export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 	protected get restrictionsToStart(): string[] {
     	const restrictions: string[] = [];
     	const playersAmongMembersCount = this.playersAmongMembers.length;
@@ -28,7 +28,6 @@ export class Room extends GameRoom<Player, State> {
     	на поле: ${cardsToPlay}`);
     	return restrictions;
 	}
-	private _options: RoomOptions
 	private _optionsOfCards: CardOptions[]
 	protected get playersPayload() { return this._state.players.map(player => ({ id: player.id, nickname: player.nickname, score: player.score })); }
 	private readonly _timeoutAction: () => void
@@ -36,7 +35,6 @@ export class Room extends GameRoom<Player, State> {
 
 	public constructor(server: Server) {
 		super(server);
-    	this.applyOptions(Room.getDefaultOptions());
     	this.applyOptionsOfCards(Room.getDefaultOptionsOfCards());
     	this._timeoutAction = () => {
     		const movement = Room.generateRandomMovement(this._options.rows, this._options.columns);
@@ -49,7 +47,7 @@ export class Room extends GameRoom<Player, State> {
 	delete(): void {
 		// TODO: очистить комнату
 		if (this.isRunning) {
-			this._status = RoomStatuses.IDLE;
+			this._status = 'idle';
 			this._flow.stop();
 		}
 	}
@@ -93,10 +91,8 @@ export class Room extends GameRoom<Player, State> {
 		{ id: 24, title: 'Synthwave', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Synthwave.jpg' },
 		{ id: 25, title: 'Ukiyoe', url: 'https://kozlov-spy-api.tk/cardPacks/HarryDuBois/Ukiyoe.jpg' }
 	])
-	private static getDefaultOptions = (): RoomOptions => ({
-		minPlayers: 2, maxPlayers: 8, rows: 5, columns: 5, secondsToAct: 60, winScore: 3
-	})
-	private applyOptions(options: RoomOptions): void {
+	protected getDefaultOptions() { return { minPlayers: 2, maxPlayers: 8, rows: 5, columns: 5, secondsToAct: 60, winScore: 3 }; }
+	protected applyOptions(options: RoomOptions): void {
 		this._options = {
 			minPlayers: (options.minPlayers && options.minPlayers <= Room.MAX_MIN_PLAYERS && options.minPlayers >= Room.MIN_MIN_PLAYERS) ? options.minPlayers : 2,
 			maxPlayers: (options.maxPlayers && options.maxPlayers <= Room.MAX_MAX_PLAYERS && options.maxPlayers >= Room.MIN_MAX_PLAYERS) ? options.maxPlayers : 8,
@@ -175,7 +171,7 @@ export class Room extends GameRoom<Player, State> {
 			winner: ''
 		};
 		// Запускаем поток событий
-		this._status = RoomStatuses.IS_RUNNING;
+		this._status = 'run';
 		this._flow.checkout(this._timeoutAction, this._options.secondsToAct);
 		// Отправляем данные пользователям
 		this.sendActFlagToAll(false);
@@ -193,7 +189,7 @@ export class Room extends GameRoom<Player, State> {
 		if (!this.isRunning) return;
 		if (ownerKey !== this._ownerKey) return;
 		//
-		this._status = RoomStatuses.IDLE;
+		this._status = 'idle';
 		this._state.field.unmarkCards();
 		this.sendFieldCardsToAll();
 		this._flow.stop();
@@ -206,7 +202,7 @@ export class Room extends GameRoom<Player, State> {
 		if (ownerKey !== this._ownerKey) return;
 		this._flow.pause();
 
-		this._status = RoomStatuses.ON_PAUSE;
+		this._status = 'pause';
 
 		this.sendRoomStatusToAll();
 	}
@@ -216,7 +212,7 @@ export class Room extends GameRoom<Player, State> {
 		if (ownerKey !== this._ownerKey) return;
 		this._flow.resume();
 
-		this._status = RoomStatuses.IS_RUNNING;
+		this._status = 'run';
 
 		this.sendRoomStatusToAll();
 	}
@@ -273,15 +269,6 @@ export class Room extends GameRoom<Player, State> {
 		this.sendRestrictionsToStartToUser(this._owner.user.id);
     	this._logger.log(`User ${user.id} joined as spectator`);
     	return true;
-	}
-
-	public setOptions(options: RoomOptions, ownerKey: string): boolean {
-		if (this.isRunning) return false;
-		if (this._ownerKey !== ownerKey) return false;
-		this.applyOptions(options);
-		this.sendOptionsToAll();
-		this.sendRestrictionsToStartToUser(this._owner.user.id);
-		return true;
 	}
 
 	public setOptionsOfCards(optionsOfCards: CardOptions[], ownerKey: string): boolean {
@@ -356,7 +343,7 @@ export class Room extends GameRoom<Player, State> {
 	}
 
 	private win(): void {
-		this._status = RoomStatuses.IDLE;
+		this._status = 'idle';
 		this._flow.stop();
 		this.sendRoomStatusToAll();
 		this._state.winner = this.currentPlayer.nickname;
@@ -435,11 +422,6 @@ export class Room extends GameRoom<Player, State> {
 		return true;
 	}
 
-	public requestOptions(user: User): void {
-		if (!user) return;
-		this.sendOptionsToUser(user.id);
-	}
-
 	public requestOptionsOfCards(user: User): void {
 		if (!user) return;
 		this.sendOptionsOfCardsToUser(user.id);
@@ -453,10 +435,6 @@ export class Room extends GameRoom<Player, State> {
 
 	private sendSizesToAll() { this.channel.emit(Events.GET_SIZES, this._state.field.sizes); }
 	private sendSizesToUser(userId: string) { this._server.to(userId).emit(Events.GET_SIZES, this._state.field.sizes); }
-
-
-	private sendOptionsToAll() { this.channel.emit(Events.GET_ROOM_OPTIONS, this._options); }
-	private sendOptionsToUser(userId: string) { this._server.to(userId).emit(Events.GET_ROOM_OPTIONS, this._options); }
 
 	private sendOptionsOfCardsToAll() { this.channel.emit(Events.GET_ROOM_OPTIONS_OF_CARDS, this._optionsOfCards); }
 	private sendOptionsOfCardsToUser(userId: string) { this._server.to(userId).emit(Events.GET_ROOM_OPTIONS_OF_CARDS, this._optionsOfCards); }

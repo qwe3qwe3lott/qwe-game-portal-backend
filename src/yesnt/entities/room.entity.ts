@@ -3,14 +3,19 @@ import {User} from '../../types/user.type';
 import {GameRoom} from '../../abstracts/game-room.abstract';
 import {Player} from './player.entity';
 import {State} from '../types/state.type';
+import {RoomStatus} from '../types/room-status.type';
+import {RoomOptions} from '../types/room-options.type';
 
 
-export class Room extends GameRoom<Player, State> {
+export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 	protected get restrictionsToStart(): string[] { return []; }
 	protected get playersPayload() { return this._state.players.map(player => ({ id: player.id, nickname: player.nickname })); }
 	public constructor(server: Server) {
     	super(server);
 	}
+
+	protected applyOptions(options: RoomOptions): void { console.log(options); }
+	protected getDefaultOptions(): RoomOptions { return { minPlayers: 2, maxPlayers: 8 }; }
 
 	public delete(): void { console.log(); }
 

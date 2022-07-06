@@ -7,11 +7,12 @@ import {Flow} from '../entities/flow.entity';
 import {GamePlayer} from './game-player.abstract';
 import {RoomState} from '../types/room-state.type';
 import {User} from '../types/user.type';
-import {RoomStatuses} from '../enums/room-statuses.enum';
 import {GameEvents} from '../enums/game-events.enum';
 import {LogRecord} from '../types/log-record.type';
+import {GameRoomStatus} from '../types/game-room-status.type';
+import {GameRoomOptions} from '../types/game-room-options.type';
 
-export abstract class GameRoom<P extends GamePlayer, S extends RoomState<P>> implements IDeletableRoom {
+export abstract class GameRoom<P extends GamePlayer, S extends RoomState<P>, R extends GameRoomStatus, O extends GameRoomOptions> implements IDeletableRoom {
     protected static readonly ADDITIONAL_NICKNAME_CHAR = ')'
     protected readonly _id: string; public get id() { return this._id; }
     protected readonly _logger: Logger
@@ -27,22 +28,27 @@ export abstract class GameRoom<P extends GamePlayer, S extends RoomState<P>> imp
     protected _state?: S
     protected get currentPlayer() { return this._state.players[0]; }
     protected abstract get playersPayload(): unknown[]
-    protected _status: RoomStatuses
-    protected get isRunning() { return this._status === RoomStatuses.IS_RUNNING || this._status === RoomStatuses.ON_PAUSE; }
-    protected get isOnPause() { return this._status === RoomStatuses.ON_PAUSE; }
+    protected _status: R
+    protected get isRunning() { return this._status === 'run' || this._status === 'pause'; }
+    protected get isOnPause() { return this._status === 'pause'; }
     protected abstract get restrictionsToStart(): string[]
+    protected _options: O
 
     protected constructor(server: Server) {
     	this._server = server;
     	this._id = uuidv4();
-    	this._status = RoomStatuses.IDLE;
+    	this._status = 'idle' as R;
     	this._owner = null;
     	this._ownerKey = uuidv4();
     	this._members = [];
     	this._failedChecksCount = 0;
     	this._logger = new Logger(`Room ${this._id}`);
     	this._flow = new Flow();
+    	this.applyOptions(this.getDefaultOptions());
     }
+
+    protected abstract getDefaultOptions(): O
+    protected abstract applyOptions(options: O): void
 
     public checkActivity(): boolean { return this._members.length > 0; }
     public increaseFailedChecksCount(): number { return ++this._failedChecksCount; }
@@ -65,6 +71,20 @@ export abstract class GameRoom<P extends GamePlayer, S extends RoomState<P>> imp
     	user.nickname = nickname;
     	this.sendMembersToAll();
     	return nickname;
+    }
+
+    public setOptions(options: O, ownerKey: string): boolean {
+    	if (this.isRunning) return false;
+    	if (this._ownerKey !== ownerKey) return false;
+    	this.applyOptions(options);
+    	this.sendOptionsToAll();
+    	this.sendRestrictionsToStartToUser(this._owner.user.id);
+    	return true;
+    }
+
+    public requestOptions(user: User): void {
+    	if (!user) return;
+    	this.sendOptionsToUser(user.id);
     }
 
     public requestTimer(user: User): void {
@@ -97,4 +117,7 @@ export abstract class GameRoom<P extends GamePlayer, S extends RoomState<P>> imp
     protected sendOwnerKeyToUser(userId: string) { this._server.to(userId).emit(GameEvents.GET_OWNER_KEY, this._ownerKey); }
 
     protected sendNicknameToUser(userId: string, nickname: string, force: boolean) { this._server.to(userId).emit(GameEvents.GET_NICKNAME, { nickname, force }); }
+
+    protected sendOptionsToAll() { this.channel.emit(GameEvents.GET_ROOM_OPTIONS, this._options); }
+    protected sendOptionsToUser(userId: string) { this._server.to(userId).emit(GameEvents.GET_ROOM_OPTIONS, this._options); }
 }

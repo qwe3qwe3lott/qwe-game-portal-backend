@@ -2,10 +2,11 @@ import {Injectable} from '@nestjs/common';
 import {Room} from './entities/room.entity';
 import {GameService} from '../abstracts/game-service.abstract';
 import {Server} from 'socket.io';
+import {RoomOptions} from './types/room-options.type';
 
 
 @Injectable()
-export class YesntService extends GameService<Room> {
+export class YesntService extends GameService<Room, RoomOptions> {
 	constructor() { super('YesntService'); }
 
 	createRoom(server: Server): string {
