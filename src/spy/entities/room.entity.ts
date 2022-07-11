@@ -8,7 +8,6 @@ import {State} from '../types/state.type';
 import {Player} from './player.entity';
 import {FieldCard} from '../types/field-card.type';
 import {Field} from './field.entity';
-import {randomElement} from '../../util/random-element.util';
 import {MovementDto} from '../dto/movement.dto';
 import {LogRecord} from '../../types/log-record.type';
 import {CardOptions} from '../types/card-options.type';
@@ -43,6 +42,8 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 			this.letNextPlayerToActAndLaunchTimer();
 		};
 	}
+
+	protected get isRunning() { return this._status === 'run'; }
 
 	delete(): void {
 		// TODO: очистить комнату
@@ -183,38 +184,37 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		this.sendLogsToAll();
 		this.sendTimerToAll();
 		this.sendRoomStatusToAll();
+		this.sendPauseFlagToAll();
 	}
 
 	public stop(ownerKey: string): void {
 		if (!this.isRunning) return;
 		if (ownerKey !== this._ownerKey) return;
-		//
+
 		this._status = 'idle';
 		this._state.field.unmarkCards();
 		this.sendFieldCardsToAll();
 		this._flow.stop();
-		//
 		this.sendRoomStatusToAll();
+		this.sendPauseFlagToAll();
 	}
 
 	public pause(ownerKey: string): void {
 		if (!this.isRunning || this.isOnPause) return;
 		if (ownerKey !== this._ownerKey) return;
+
 		this._flow.pause();
-
-		this._status = 'pause';
-
 		this.sendRoomStatusToAll();
+		this.sendPauseFlagToAll();
 	}
 
 	public resume(ownerKey: string): void {
 		if (!this.isOnPause) return;
 		if (ownerKey !== this._ownerKey) return;
+
 		this._flow.resume();
-
-		this._status = 'run';
-
 		this.sendRoomStatusToAll();
+		this.sendPauseFlagToAll();
 	}
 
 	public join(user: User): boolean {
@@ -249,6 +249,7 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 			// Если матч в комнате сейчас идёт
 			if (this.isRunning) {
 				this.sendRoomStatusToUser(user.id);
+				this.sendPauseFlagToUser(user.id);
 				this.sendTimerToUser(user.id);
 				// Проверяем, если пользователь переподключился к комнате
 				const player = this.checkRejoin(user);
@@ -277,13 +278,6 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		this.applyOptionsOfCards(optionsOfCards);
 		this.sendOptionsOfCardsToAll();
 		return true;
-	}
-
-	private checkRejoin(user: User): Player | undefined {
-		if (this.playersAmongMembers.length >= this._state.players.length) return;
-		for (const player of this._state.players) {
-			if (user.nickname === player.nickname) return player;
-		}
 	}
 
 	private createAndApplyMovementLogRecord(movement: MovementDto, nickname: string, isTimeout?: boolean): LogRecord {
@@ -346,6 +340,7 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		this._status = 'idle';
 		this._flow.stop();
 		this.sendRoomStatusToAll();
+		this.sendPauseFlagToAll();
 		this._state.winner = this.currentPlayer.nickname;
 		this.sendLastWinnerToAll();
 		this._state.field.unmarkCards();
@@ -387,39 +382,6 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		const spiesCount = this._state.field.ask(card, this.cardsOfPlayers.filter(playerCard => playerCard !== this.currentPlayer.card));
 		this.createAndApplyAskLogRecord(card, this.currentPlayer.nickname, spiesCount);
 		this.letNextPlayerToActAndLaunchTimer();
-	}
-
-	public kick(leavingUser: User): void {
-    	this._logger.log(`User ${leavingUser?.id} leaving`);
-    	if (!leavingUser) return;
-    	this._members = this._members.filter(member => member.user.id !== leavingUser.id);
-    	if (this._members.length === 0) {
-    	    this._owner = null;
-    	    this._ownerKey = null;
-    	} else if (leavingUser.id === this._owner.user.id) {
-			this._owner = randomElement(this._members);
-			this._ownerKey = uuidv4();
-			this.sendOwnerKeyToUser(this._owner.user.id);
-			this.sendRestrictionsToStartToUser(this._owner.user.id);
-    	} else {
-			this.sendRestrictionsToStartToUser(this._owner.user.id);
-		}
-    	leavingUser.socket.leave(this._id);
-    	this.sendMembersToAll();
-    	this._logger.log(`User ${leavingUser.id} left`);
-	}
-
-	public become(user: User, becomePlayer: boolean): boolean {
-    	this._logger.log(`User ${user?.id} becoming ${becomePlayer ? 'player' : 'spectator'}`);
-    	if (this.isRunning) return false;
-    	if (!user) return false;
-    	const member = this._members.find(member => member.user.id === user.id);
-    	if (!member) return false;
-    	member.isPlayer = becomePlayer;
-    	this._logger.log(`User ${user?.id} became ${becomePlayer ? 'player' : 'spectator'}`);
-    	this.sendMembersToAll();
-		this.sendRestrictionsToStartToUser(this._owner.user.id);
-		return true;
 	}
 
 	public requestOptionsOfCards(user: User): void {

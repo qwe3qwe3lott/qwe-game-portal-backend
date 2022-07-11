@@ -9,3 +9,16 @@ async function bootstrap() {
 	await app.listen(3003);
 }
 bootstrap();
+
+/*type A = 'a' | 'b'
+type B = A | 'c'
+
+abstract class Class<R extends string> {
+	_x: R
+}
+class ClassB extends Class<B>{
+
+}
+const b = new ClassB();
+b._x = '123';
+console.log(b._x === '123');*/

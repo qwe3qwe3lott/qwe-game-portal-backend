@@ -18,6 +18,7 @@ export enum GameEvents {
     GET_ROOM_STATUS = 'getRoomStatus',
     GET_ROOM_OPTIONS = 'getRoomOptions',
     GET_ACT_FLAG = 'getActFlag',
+    GET_PAUSE_FLAG = 'getPauseFlag',
     GET_PLAYERS = 'getPlayers',
     GET_RESTRICTIONS_TO_START = 'getRestrictionsToStart',
     GET_TIMER = 'getTimer',

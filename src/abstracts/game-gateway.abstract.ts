@@ -6,15 +6,15 @@ import {GameService} from './game-service.abstract';
 import {GameRoom} from './game-room.abstract';
 import {GamePlayer} from './game-player.abstract';
 import {RoomState} from '../types/room-state.type';
-import {GameRoomStatus} from '../types/game-room-status.type';
 import {GameRoomOptions} from '../types/game-room-options.type';
 import {OptionsDto} from '../dto/options.dto';
 
-export abstract class GameGateway<S extends GameService<GameRoom<GamePlayer, RoomState<GamePlayer>, GameRoomStatus, O>, O>, O extends GameRoomOptions> {
+export abstract class
+GameGateway<SERVICE extends GameService<GameRoom<GamePlayer, RoomState<GamePlayer>, STATUS, OPTIONS>, OPTIONS, STATUS>, OPTIONS extends GameRoomOptions, STATUS extends string> {
     @WebSocketServer()
     private _server: Server;
 
-    protected constructor(protected readonly _service: S) {}
+    protected constructor(protected readonly _service: SERVICE) {}
 
     handleConnection(socket: SocketWithData) { this._service.addUser(socket); }
     handleDisconnect(socket: SocketWithData) { this._service.removeUser(socket.data); }
@@ -85,7 +85,7 @@ export abstract class GameGateway<S extends GameService<GameRoom<GamePlayer, Roo
     }
 
     @SubscribeMessage(GameEvents.CHANGE_ROOM_OPTIONS)
-    changeRoomOptions(@MessageBody() optionsDto: OptionsDto<O>, @ConnectedSocket() socket: SocketWithData): boolean {
+    changeRoomOptions(@MessageBody() optionsDto: OptionsDto<OPTIONS>, @ConnectedSocket() socket: SocketWithData): boolean {
     	if (!optionsDto) return false;
     	return this._service.changeRoomOptions(optionsDto, socket.data);
     }

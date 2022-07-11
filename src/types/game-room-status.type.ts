@@ -1,1 +1,1 @@
-export type GameRoomStatus = 'idle' | 'run' | 'pause';
+export type GameRoomStatus = 'idle'

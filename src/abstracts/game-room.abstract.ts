@@ -9,10 +9,10 @@ import {RoomState} from '../types/room-state.type';
 import {User} from '../types/user.type';
 import {GameEvents} from '../enums/game-events.enum';
 import {LogRecord} from '../types/log-record.type';
-import {GameRoomStatus} from '../types/game-room-status.type';
 import {GameRoomOptions} from '../types/game-room-options.type';
+import {randomElement} from '../util/random-element.util';
 
-export abstract class GameRoom<P extends GamePlayer, S extends RoomState<P>, R extends GameRoomStatus, O extends GameRoomOptions> implements IDeletableRoom {
+export abstract class GameRoom<PLAYER extends GamePlayer, STATE extends RoomState<PLAYER>, STATUS extends string, OPTIONS extends GameRoomOptions> implements IDeletableRoom {
     protected static readonly ADDITIONAL_NICKNAME_CHAR = ')'
     protected readonly _id: string; public get id() { return this._id; }
     protected readonly _logger: Logger
@@ -25,19 +25,19 @@ export abstract class GameRoom<P extends GamePlayer, S extends RoomState<P>, R e
     protected get channel() { return this._server.to(this._id); }
     private _failedChecksCount: number
     protected readonly _flow: Flow
-    protected _state?: S
+    protected _state?: STATE
     protected get currentPlayer() { return this._state.players[0]; }
     protected abstract get playersPayload(): unknown[]
-    protected _status: R
-    protected get isRunning() { return this._status === 'run' || this._status === 'pause'; }
-    protected get isOnPause() { return this._status === 'pause'; }
+    protected _status: STATUS
+    protected abstract get isRunning()
+    protected get isOnPause() { return this.isRunning && this._flow.notRunning; }
     protected abstract get restrictionsToStart(): string[]
-    protected _options: O
+    protected _options: OPTIONS
 
     protected constructor(server: Server) {
     	this._server = server;
     	this._id = uuidv4();
-    	this._status = 'idle' as R;
+    	this._status = 'idle' as STATUS;
     	this._owner = null;
     	this._ownerKey = uuidv4();
     	this._members = [];
@@ -47,10 +47,18 @@ export abstract class GameRoom<P extends GamePlayer, S extends RoomState<P>, R e
     	this.applyOptions(this.getDefaultOptions());
     }
 
-    protected abstract getDefaultOptions(): O
-    protected abstract applyOptions(options: O): void
+    protected abstract getDefaultOptions(): OPTIONS
+    protected abstract applyOptions(options: OPTIONS): void
 
-    public checkActivity(): boolean { return this._members.length > 0; }
+    public checkActivity(): boolean {
+    	if (this._members.length <= 0) {
+    		if (this.isRunning) {
+    			this._status = 'idle' as STATUS;
+    			this._flow.stop();
+    		}
+    	}
+    	return this._members.length > 0;
+    }
     public increaseFailedChecksCount(): number { return ++this._failedChecksCount; }
     public abstract delete(): void
 
@@ -62,8 +70,6 @@ export abstract class GameRoom<P extends GamePlayer, S extends RoomState<P>, R e
     public abstract resume(ownerKey: string): void
 
     public abstract join(user: User): boolean
-    public abstract become(user: User, becomePlayer: boolean): boolean
-    public abstract kick(user: User): void
 
     public changeNickname(user: User, nickname: string): string {
     	if (this.isRunning) return '';
@@ -73,13 +79,58 @@ export abstract class GameRoom<P extends GamePlayer, S extends RoomState<P>, R e
     	return nickname;
     }
 
-    public setOptions(options: O, ownerKey: string): boolean {
+    public setOptions(options: OPTIONS, ownerKey: string): boolean {
     	if (this.isRunning) return false;
     	if (this._ownerKey !== ownerKey) return false;
     	this.applyOptions(options);
     	this.sendOptionsToAll();
     	this.sendRestrictionsToStartToUser(this._owner.user.id);
     	return true;
+    }
+
+    protected checkRejoin(user: User): PLAYER | undefined {
+    	if (this.playersAmongMembers.length >= this._state.players.length) return;
+    	for (const player of this._state.players) {
+    		if (user.nickname === player.nickname) return player;
+    	}
+    }
+
+    public become(user: User, becomePlayer: boolean): boolean {
+    	this._logger.log(`EVENT: User ${user.id} tries to become ${becomePlayer ? 'player' : 'spectator'}`);
+    	if (this.isRunning) {
+    	    this._logger.log('FAIL: game is running');
+    	    return false;
+    	}
+    	const member = this._members.find(member => member.user.id === user.id);
+    	if (!member) {
+    		this._logger.log('FAIL: user was not found in members list');
+    	    return false;
+    	}
+    	member.isPlayer = becomePlayer;
+    	this._logger.log(`SUCCESS: User ${user.id} became ${becomePlayer ? 'player' : 'spectator'}`);
+    	this.sendMembersToAll();
+    	this.sendRestrictionsToStartToUser(this._owner.user.id);
+    	return true;
+    }
+
+    public kick(user: User): void {
+    	this._logger.log(`User ${user?.id} leaving`);
+    	if (!user) return;
+    	this._members = this._members.filter(member => member.user.id !== user.id);
+    	if (this._members.length === 0) {
+    		this._owner = null;
+    		this._ownerKey = null;
+    	} else if (user.id === this._owner.user.id) {
+    		this._owner = randomElement(this._members);
+    		this._ownerKey = uuidv4();
+    		this.sendOwnerKeyToUser(this._owner.user.id);
+    		this.sendRestrictionsToStartToUser(this._owner.user.id);
+    	} else {
+    		this.sendRestrictionsToStartToUser(this._owner.user.id);
+    	}
+    	user.socket.leave(this._id);
+    	this.sendMembersToAll();
+    	this._logger.log(`User ${user.id} left`);
     }
 
     public requestOptions(user: User): void {
@@ -111,6 +162,9 @@ export abstract class GameRoom<P extends GamePlayer, S extends RoomState<P>, R e
 
     protected sendActFlagToAll(flag: boolean) { this.channel.emit(GameEvents.GET_ACT_FLAG, flag); }
     protected sendActFlagToUser(userId: string, flag: boolean) { this._server.to(userId).emit(GameEvents.GET_ACT_FLAG, flag); }
+
+    protected sendPauseFlagToAll() { this.channel.emit(GameEvents.GET_PAUSE_FLAG, this.isOnPause); }
+    protected sendPauseFlagToUser(userId: string) { this._server.to(userId).emit(GameEvents.GET_PAUSE_FLAG, this.isOnPause); }
 
     protected sendRestrictionsToStartToUser(userId: string) { this._server.to(userId).emit(GameEvents.GET_RESTRICTIONS_TO_START, this.restrictionsToStart); }
 

@@ -9,16 +9,15 @@ import {GameEvents} from '../enums/game-events.enum';
 import {GameRoom} from './game-room.abstract';
 import {GamePlayer} from './game-player.abstract';
 import {RoomState} from '../types/room-state.type';
-import {GameRoomStatus} from '../types/game-room-status.type';
 import {GameRoomOptions} from '../types/game-room-options.type';
 import {OptionsDto} from '../dto/options.dto';
 
 @Injectable()
-export abstract class GameService<R extends GameRoom<GamePlayer, RoomState<GamePlayer>, GameRoomStatus, O>, O extends GameRoomOptions> {
+export abstract class GameService<ROOM extends GameRoom<GamePlayer, RoomState<GamePlayer>, STATUS, OPTIONS>, OPTIONS extends GameRoomOptions, STATUS extends string> {
     private static readonly SECONDS_BETWEEN_DELETES = 900;
     private static readonly FAILED_CHECKS_COUNT_TO_DELETE = 3;
     protected readonly _logger: Logger
-	protected readonly _rooms: R[]
+	protected readonly _rooms: ROOM[]
 	protected readonly _users: User[]
 
 	protected constructor(name: string) {
@@ -151,7 +150,7 @@ export abstract class GameService<R extends GameRoom<GamePlayer, RoomState<GameP
     	room.requestTimer(user);
     }
 
-    changeRoomOptions(optionsDto: OptionsDto<O>, socketData: SocketData): boolean {
+    changeRoomOptions(optionsDto: OptionsDto<OPTIONS>, socketData: SocketData): boolean {
     	if (!socketData.roomId) return false;
     	const room = this._rooms.find(room => room.id === socketData.roomId);
     	const user = this._users.find(user => user.id === socketData.userId);

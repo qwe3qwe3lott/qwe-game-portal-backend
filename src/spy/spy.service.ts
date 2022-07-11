@@ -6,9 +6,10 @@ import {MovementDto} from './dto/movement.dto';
 import {OptionsOfCardsDto} from './dto/options-of-cards.dto';
 import {GameService} from '../abstracts/game-service.abstract';
 import {RoomOptions} from './types/room-options.type';
+import {RoomStatus} from './types/room-status.type';
 
 @Injectable()
-export class SpyService extends GameService<Room, RoomOptions> {
+export class SpyService extends GameService<Room, RoomOptions, RoomStatus> {
 	constructor() { super('SpyService'); }
 
 	createRoom(server: Server): string {

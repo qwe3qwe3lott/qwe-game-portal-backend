@@ -6,12 +6,13 @@ import {MovementDto} from './dto/movement.dto';
 import {OptionsOfCardsDto} from './dto/options-of-cards.dto';
 import {GameGateway} from '../abstracts/game-gateway.abstract';
 import {RoomOptions} from './types/room-options.type';
+import {RoomStatus} from './types/room-status.type';
 
 @WebSocketGateway({
 	namespace: 'spy',
 	cors: { origin: '*' }
 })
-export class SpyGateway extends GameGateway<SpyService, RoomOptions> {
+export class SpyGateway extends GameGateway<SpyService, RoomOptions, RoomStatus> {
 	constructor(protected readonly _service: SpyService) { super(_service); }
 
 	@SubscribeMessage(Events.MOVE_CARDS)
