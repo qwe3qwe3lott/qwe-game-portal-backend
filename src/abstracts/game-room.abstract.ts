@@ -52,10 +52,7 @@ export abstract class GameRoom<PLAYER extends GamePlayer, STATE extends RoomStat
 
     public checkActivity(): boolean {
     	if (this._members.length <= 0) {
-    		if (this.isRunning) {
-    			this._status = 'idle' as STATUS;
-    			this._flow.stop();
-    		}
+    		if (this.isRunning) this._flow.pause();
     	}
     	return this._members.length > 0;
     }

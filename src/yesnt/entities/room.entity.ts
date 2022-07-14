@@ -42,15 +42,18 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 	private static readonly MAX_SECONDS_TO_ANSWER = 180;
 	protected applyOptions(options: RoomOptions): void {
 		this._options = {
-			minPlayers: (options.minPlayers && options.minPlayers <= Room.MAX_MIN_PLAYERS && options.minPlayers >= Room.MIN_MIN_PLAYERS) ? options.minPlayers : 2,
-			maxPlayers: (options.maxPlayers && options.maxPlayers <= Room.MAX_MAX_PLAYERS && options.maxPlayers >= Room.MIN_MAX_PLAYERS) ? options.maxPlayers : 8,
-			secondsToAsk: (options.secondsToAsk && options.secondsToAsk <= Room.MAX_SECONDS_TO_ASK && options.secondsToAsk >= Room.MIN_SECONDS_TO_ASK) ? options.secondsToAsk : 8,
+			minPlayers: (options.minPlayers && options.minPlayers <= Room.MAX_MIN_PLAYERS && options.minPlayers >= Room.MIN_MIN_PLAYERS)
+				? options.minPlayers : 2,
+			maxPlayers: (options.maxPlayers && options.maxPlayers <= Room.MAX_MAX_PLAYERS && options.maxPlayers >= Room.MIN_MAX_PLAYERS)
+				? options.maxPlayers : 8,
+			secondsToAsk: (options.secondsToAsk && options.secondsToAsk <= Room.MAX_SECONDS_TO_ASK && options.secondsToAsk >= Room.MIN_SECONDS_TO_ASK)
+				? options.secondsToAsk : 60,
 			secondsToAnswer:(options.secondsToAnswer && options.secondsToAnswer <= Room.MAX_SECONDS_TO_ANSWER && options.secondsToAnswer >= Room.MIN_SECONDS_TO_ANSWER)
-				? options.secondsToAnswer : 8
+				? options.secondsToAnswer : 60
 		};
 		if (this._options.minPlayers > this._options.maxPlayers) this._options.minPlayers = this._options.maxPlayers;
 	}
-	protected getDefaultOptions(): RoomOptions { return { minPlayers: 2, maxPlayers: 8, secondsToAsk: 15, secondsToAnswer: 60 }; }
+	protected getDefaultOptions(): RoomOptions { return { minPlayers: 2, maxPlayers: 8, secondsToAsk: 60, secondsToAnswer: 60 }; }
 
 	protected get isRunning() { return this._status === 'ask' || this._status === 'answer'; }
 	protected get isAsking() { return this._status === 'ask'; }
