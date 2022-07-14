@@ -13,7 +13,7 @@ import {GameRoomOptions} from '../types/game-room-options.type';
 import {randomElement} from '../util/random-element.util';
 
 export abstract class GameRoom<PLAYER extends GamePlayer, STATE extends RoomState<PLAYER>, STATUS extends string, OPTIONS extends GameRoomOptions> implements IDeletableRoom {
-    protected static readonly ADDITIONAL_NICKNAME_CHAR = ')'
+    private static readonly ADDITIONAL_NICKNAME_CHAR = ')'
     protected readonly _id: string; public get id() { return this._id; }
     protected readonly _logger: Logger
     protected _owner: Member | null
@@ -66,7 +66,37 @@ export abstract class GameRoom<PLAYER extends GamePlayer, STATE extends RoomStat
     public abstract pause(ownerKey: string): void
     public abstract resume(ownerKey: string): void
 
-    public abstract join(user: User): boolean
+    public join(user: User): boolean {
+    	this._logger.log(`EVENT: User ${user.id} tries to join room`);
+    	// Переименновываем пользователя при входе, если пользователь с таким ником уже есть в комнате
+    	const renamed = false;
+    	while (this._members.some(member => member.user.nickname === user.nickname)) {
+    		user.nickname += GameRoom.ADDITIONAL_NICKNAME_CHAR;
+    	}
+    	if (renamed) {
+    	    this.sendNicknameToUser(user.id, user.nickname, true);
+    		this._logger.log(`ADDITIONAL: User ${user.id} was renamed`);
+    	}
+    	// Добавляем пользователя с список пользователей в комнате
+    	const member: Member = { user, isPlayer: false };
+    	this._members.push(member);
+    	// Подключаем пользователя к каналу комнаты
+    	user.socket.join(this._id);
+    	this._logger.log(`SUCCESS: User ${user.id} joined room`);
+    	this.onJoinSuccess(member);
+    	this.sendMembersToAll();
+    	// Если при входе в комнату в ней ниткого не было, то пользователь становится владельцем комнаты
+    	if (!this._owner) {
+    		this._owner = member;
+    		this._ownerKey = uuidv4();
+    		this.sendOwnerKeyToUser(this._owner.user.id);
+    		this.sendRestrictionsToStartToUser(this._owner.user.id);
+    		this._logger.log(`ADDITIONAL: User ${user.id} became owner of room`);
+    	}
+    	return true;
+    }
+
+    protected abstract onJoinSuccess(member: Member): void
 
     public changeNickname(user: User, nickname: string): string {
     	if (this.isRunning) return '';

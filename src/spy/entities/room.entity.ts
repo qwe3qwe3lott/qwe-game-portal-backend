@@ -217,26 +217,8 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		this.sendPauseFlagToAll();
 	}
 
-	public join(user: User): boolean {
-    	this._logger.log(`User ${user.id} joining`);
-    	// Переименновываем пользователя при входе, если пользователь с таким ником уже есть в комнате
-    	const renamed = false;
-    	while (this._members.some(member => member.user.nickname === user.nickname)) {
-    		user.nickname += Room.ADDITIONAL_NICKNAME_CHAR;
-		}
-		if (renamed) this.sendNicknameToUser(user.id, user.nickname, true);
-		// Добавляем пользователя с список пользователей в комнате
-		const member: Member = { user, isPlayer: false };
-    	this._members.push(member);
-    	// Если при входе в комнату в ней ниткого не было, то пользователь становится владельцем комнаты
-    	if (!this._owner) {
-    	    this._owner = member;
-    	    this._ownerKey = uuidv4();
-			this.sendOwnerKeyToUser(this._owner.user.id);
-			this.sendRestrictionsToStartToUser(this._owner.user.id);
-    	}
-    	// Подключаем пользователя к каналу комнаты
-    	user.socket.join(this._id);
+	protected onJoinSuccess(member: Member): void {
+    	const user = member.user;
     	// Далее отправляем пользователю данные из комнаты
     	this.sendOptionsToUser(user.id);
     	this.sendOptionsOfCardsToUser(user.id);
@@ -266,10 +248,6 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 			}
 			this.sendLogsToUser(user.id);
 		}
-    	this.sendMembersToAll();
-		this.sendRestrictionsToStartToUser(this._owner.user.id);
-    	this._logger.log(`User ${user.id} joined as spectator`);
-    	return true;
 	}
 
 	public setOptionsOfCards(optionsOfCards: CardOptions[], ownerKey: string): boolean {
@@ -280,7 +258,7 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		return true;
 	}
 
-	private createAndApplyMovementLogRecord(movement: MovementDto, nickname: string, isTimeout?: boolean): LogRecord {
+	private createAndApplyMovementLogRecord(movement: MovementDto, nickname: string, isTimeout?: boolean) {
 		const logRecord: LogRecord = {
 			id: this._state.logs.length + 1,
 			text: `${isTimeout ? '(Тайм аут) ' : ''} "${nickname}" передвинул ${movement.id} ${movement.isRow ? 'строку' : 'столбец'} 
@@ -288,10 +266,9 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		};
 		this._state.logs.unshift(logRecord);
 		this.sendLogRecordToAll(logRecord);
-		return logRecord;
 	}
 
-	private createAndApplyCaptureLogRecord(card: FieldCard, nickname: string, capturedNickname?: string): LogRecord {
+	private createAndApplyCaptureLogRecord(card: FieldCard, nickname: string, capturedNickname?: string) {
 		const logRecord: LogRecord = {
 			id: this._state.logs.length + 1,
 			text: capturedNickname ? `"${capturedNickname}", будучи "${card.title}", был пойман игроком ${nickname}`
@@ -299,17 +276,15 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		};
 		this._state.logs.unshift(logRecord);
 		this.sendLogRecordToAll(logRecord);
-		return logRecord;
 	}
 
-	private createAndApplyAskLogRecord(card: FieldCard, nickname: string, spiesCount: number): LogRecord {
+	private createAndApplyAskLogRecord(card: FieldCard, nickname: string, spiesCount: number) {
 		const logRecord: LogRecord = {
 			id: this._state.logs.length + 1,
 			text: `"${nickname}" допросил "${card.title}" и ${spiesCount === 0 ? 'никого не нашёл' : `обнаружил шпионов (${spiesCount})`}`
 		};
 		this._state.logs.unshift(logRecord);
 		this.sendLogRecordToAll(logRecord);
-		return logRecord;
 	}
 
 	private letNextPlayerToActAndLaunchTimer(): void {

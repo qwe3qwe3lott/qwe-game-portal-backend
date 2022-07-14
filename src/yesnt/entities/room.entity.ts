@@ -6,10 +6,10 @@ import {State} from '../types/state.type';
 import {RoomStatus} from '../types/room-status.type';
 import {RoomOptions} from '../types/room-options.type';
 import {Member} from '../../types/member.type';
-import {v4 as uuidv4} from 'uuid';
 import {Answers} from '../enums/answers.enum';
 import {Events} from '../enums/events.enum';
 import {Result} from '../types/result.type';
+import {LogRecord} from '../../types/log-record.type';
 
 export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 	protected get restrictionsToStart(): string[] {
@@ -25,6 +25,7 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 	public constructor(server: Server) {
     	super(server);
     	this._askTimeoutAction = () => {
+    		this.createAndApplySkipAskLogRecord(this.currentPlayer.nickname, true);
     		this.letNextPlayerToAskAndLaunchTimer(true);
 		};
 		this._answerTimeoutAction = () => {
@@ -107,6 +108,7 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		}
 		this._state.result = result;
 		this.sendResultToAll();
+		this.createAndApplyResultLogRecord(result);
 	}
 
 	public start(ownerKey: string): void {
@@ -182,6 +184,7 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 
 		this._logger.log(`SUCCESS: User ${user.id} asked question`);
 		this._state.question = question;
+		this.createAndApplyAskLogRecord(question, user.nickname);
 		this.letPlayersToAnswerAndLaunchTimer();
 	}
 
@@ -194,6 +197,7 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 			return this._logger.log('FAIL: User is not allowed to act');
 
 		this._logger.log(`SUCCESS: User ${user.id} skipped his turn to ask question`);
+		this.createAndApplySkipAskLogRecord(user.nickname);
 		this.letNextPlayerToAskAndLaunchTimer(true);
 	}
 
@@ -216,26 +220,35 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		this.letNextPlayerToAskAndLaunchTimer(false);
 	}
 
-	public join(user: User): boolean {
-		this._logger.log(`User ${user.id} joining`);
-		// Переименновываем пользователя при входе, если пользователь с таким ником уже есть в комнате
-		const renamed = false;
-		while (this._members.some(member => member.user.nickname === user.nickname)) {
-			user.nickname += Room.ADDITIONAL_NICKNAME_CHAR;
-		}
-		if (renamed) this.sendNicknameToUser(user.id, user.nickname, true);
-		// Добавляем пользователя с список пользователей в комнате
-		const member: Member = { user, isPlayer: false };
-		this._members.push(member);
-		// Если при входе в комнату в ней ниткого не было, то пользователь становится владельцем комнаты
-		if (!this._owner) {
-			this._owner = member;
-			this._ownerKey = uuidv4();
-			this.sendOwnerKeyToUser(this._owner.user.id);
-			this.sendRestrictionsToStartToUser(this._owner.user.id);
-		}
-		// Подключаем пользователя к каналу комнаты
-		user.socket.join(this._id);
+	private createAndApplyAskLogRecord(question: string, nickname: string): void {
+		const logRecord: LogRecord = {
+			id: this._state.logs.length + 1,
+			text: `"${nickname}" задал вопрос: "${question}"`
+		};
+		this._state.logs.unshift(logRecord);
+		this.sendLogRecordToAll(logRecord);
+	}
+
+	private createAndApplySkipAskLogRecord(nickname: string, isTimeout?: boolean): void {
+		const logRecord: LogRecord = {
+			id: this._state.logs.length + 1,
+			text: `${isTimeout ? '(Тайм аут) ' : ''}"${nickname}" пропустил очередь`
+		};
+		this._state.logs.unshift(logRecord);
+		this.sendLogRecordToAll(logRecord);
+	}
+
+	private createAndApplyResultLogRecord(result: Result): void {
+		const logRecord: LogRecord = {
+			id: this._state.logs.length + 1,
+			text: `Результат опроса - Да: ${result.yesCount} / Нет: ${result.noCount} / Воздержались: ${result.silenceCount}`
+		};
+		this._state.logs.unshift(logRecord);
+		this.sendLogRecordToAll(logRecord);
+	}
+
+	protected onJoinSuccess(member: Member): void {
+		const user = member.user;
 		// Далее отправляем пользователю данные из комнаты
 		this.sendOptionsToUser(user.id);
 		// Наличие this._state говорит о том, что игра хоть раз запускалась
@@ -264,10 +277,6 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 			}
 			this.sendLogsToUser(user.id);
 		}
-		this.sendMembersToAll();
-		this.sendRestrictionsToStartToUser(this._owner.user.id);
-		this._logger.log(`User ${user.id} joined as spectator`);
-		return true;
 	}
 
 	protected sendQuestionToAll() { this.channel.emit(Events.GET_QUESTION, this._state.question); }
