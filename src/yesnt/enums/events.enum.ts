@@ -4,5 +4,6 @@ export enum Events {
     ANSWER = 'answer',
     GET_QUESTION = 'getQuestion',
     GET_ANSWER = 'getAnswer',
-    GET_RESULT = 'getResult'
+    GET_RESULT = 'getResult',
+    GET_COUNT_OF_ANSWERS = 'getCountOfAnswers'
 }

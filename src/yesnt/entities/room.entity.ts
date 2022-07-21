@@ -22,6 +22,7 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 	protected get playersPayload() { return this._state.players.map(player => ({ id: player.id, nickname: player.nickname })); }
 	private readonly _askTimeoutAction: () => void
 	private readonly _answerTimeoutAction: () => void
+	protected get countOfAnswers() { return this._state.players.filter(player => player.answer !== undefined).length; }
 	public constructor(server: Server) {
     	super(server);
     	this._askTimeoutAction = () => {
@@ -33,28 +34,29 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		};
 	}
 
-	private static readonly MIN_MIN_PLAYERS = 2;
-	private static readonly MAX_MIN_PLAYERS = 8;
-	private static readonly MIN_MAX_PLAYERS = 2;
-	private static readonly MAX_MAX_PLAYERS = 8;
+	private static readonly MIN_MIN_PLAYERS = 3;
+	private static readonly MAX_MIN_PLAYERS = 16;
+	private static readonly MIN_MAX_PLAYERS = 3;
+	private static readonly MAX_MAX_PLAYERS = 16;
 	private static readonly MIN_SECONDS_TO_ASK = 15;
 	private static readonly MAX_SECONDS_TO_ASK = 180;
 	private static readonly MIN_SECONDS_TO_ANSWER = 15;
 	private static readonly MAX_SECONDS_TO_ANSWER = 180;
+	protected getDefaultOptions(): RoomOptions { return { minPlayers: 3, maxPlayers: 16, secondsToAsk: 60, secondsToAnswer: 60 }; }
 	protected applyOptions(options: RoomOptions): void {
+		const defaultOptions = this.getDefaultOptions();
 		this._options = {
 			minPlayers: (options.minPlayers && options.minPlayers <= Room.MAX_MIN_PLAYERS && options.minPlayers >= Room.MIN_MIN_PLAYERS)
-				? options.minPlayers : 2,
+				? options.minPlayers : defaultOptions.minPlayers,
 			maxPlayers: (options.maxPlayers && options.maxPlayers <= Room.MAX_MAX_PLAYERS && options.maxPlayers >= Room.MIN_MAX_PLAYERS)
-				? options.maxPlayers : 8,
+				? options.maxPlayers : defaultOptions.maxPlayers,
 			secondsToAsk: (options.secondsToAsk && options.secondsToAsk <= Room.MAX_SECONDS_TO_ASK && options.secondsToAsk >= Room.MIN_SECONDS_TO_ASK)
-				? options.secondsToAsk : 60,
+				? options.secondsToAsk : defaultOptions.secondsToAsk,
 			secondsToAnswer:(options.secondsToAnswer && options.secondsToAnswer <= Room.MAX_SECONDS_TO_ANSWER && options.secondsToAnswer >= Room.MIN_SECONDS_TO_ANSWER)
-				? options.secondsToAnswer : 60
+				? options.secondsToAnswer : defaultOptions.secondsToAnswer
 		};
 		if (this._options.minPlayers > this._options.maxPlayers) this._options.minPlayers = this._options.maxPlayers;
 	}
-	protected getDefaultOptions(): RoomOptions { return { minPlayers: 2, maxPlayers: 8, secondsToAsk: 60, secondsToAnswer: 60 }; }
 
 	protected get isRunning() { return this._status === 'ask' || this._status === 'answer'; }
 	protected get isAsking() { return this._status === 'ask'; }
@@ -99,8 +101,6 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 				result.noCount += 1;
 				break;
 			case Answers.SILENCE:
-				result.silenceCount += 1;
-				break;
 			default:
 				result.silenceCount += 1;
 			}
@@ -211,8 +211,10 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 			return this._logger.log('FAIL: User is not player');
 
 		this._logger.log(`SUCCESS: User ${user.id} answered the question`);
+		const isFirstAnswerForThisUser = player.answer === undefined;
 		player.answer = answer;
 		this.sendAnswerToUser(user.id, player.answer);
+		if (isFirstAnswerForThisUser) this.sendCountOfAnswersToAll();
 		for (const player of this._state.players) {
 			if (player.answer === undefined) return;
 		}
@@ -259,7 +261,10 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 				this.sendRoomStatusToUser(user.id);
 				this.sendPauseFlagToUser(user.id);
 				this.sendTimerToUser(user.id);
-				this.sendQuestionToUser(user.id);
+				if (this.isAnswering) {
+					this.sendQuestionToUser(user.id);
+					this.sendCountOfAnswersToUser(user.id);
+				}
 				if (this._state.result) this.sendResultToUser(user.id);
 				// Проверяем, если пользователь переподключился к комнате
 				const player = this.checkRejoin(user);
@@ -286,4 +291,7 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 
 	protected sendResultToAll() { this.channel.emit(Events.GET_RESULT, this._state.result); }
 	protected sendResultToUser(userId: string) { this._server.to(userId).emit(Events.GET_RESULT, this._state.result); }
+
+	protected sendCountOfAnswersToAll() { this.channel.emit(Events.GET_COUNT_OF_ANSWERS, this.countOfAnswers); }
+	protected sendCountOfAnswersToUser(userId: string) { this._server.to(userId).emit(Events.GET_COUNT_OF_ANSWERS, this.countOfAnswers); }
 }
