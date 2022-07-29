@@ -7,10 +7,19 @@ import {GameRoom} from './game-room.abstract';
 import {GamePlayer} from './game-player.abstract';
 import {RoomState} from '../types/room-state.type';
 import {GameRoomOptions} from '../types/game-room-options.type';
-import {OptionsDto} from '../dto/options.dto';
+import {ChangeOptionsDto} from '../dto/change-options.dto';
+import {GamePlayersPayload} from '../types/game-players-payload.type';
+import {RenameRoomDto} from '../dto/rename-room.dto';
 
-export abstract class
-GameGateway<SERVICE extends GameService<GameRoom<GamePlayer, RoomState<GamePlayer>, STATUS, OPTIONS>, OPTIONS, STATUS>, OPTIONS extends GameRoomOptions, STATUS extends string> {
+export abstract class GameGateway<
+    SERVICE extends GameService<GameRoom<GamePlayer, RoomState<GamePlayer>, STATUS, OPTIONS, GamePlayersPayload>, OPTIONS, STATUS>,
+    OPTIONS extends GameRoomOptions,
+    STATUS extends string
+    > {
+    private readonly MIN_ROOM_TITLE_LENGTH = 3;
+    private readonly MAX_ROOM_TITLE_LENGTH = 30;
+    private readonly MIN_USER_NICKNAME_LENGTH = 3;
+    private readonly MAX_USER_NICKNAME_LENGTH = 30;
     @WebSocketServer()
     private _server: Server;
 
@@ -22,6 +31,8 @@ GameGateway<SERVICE extends GameService<GameRoom<GamePlayer, RoomState<GamePlaye
     @SubscribeMessage(GameEvents.CHANGE_NICKNAME)
     changeNickname(@MessageBody() nickname: string, @ConnectedSocket() socket: SocketWithData): string {
     	if (!nickname) return '';
+    	if (nickname.length < this.MIN_USER_NICKNAME_LENGTH) return '';
+    	if (nickname.length > this.MAX_USER_NICKNAME_LENGTH) nickname = nickname.substring(0, this.MAX_USER_NICKNAME_LENGTH);
     	return this._service.changeNickname(nickname, socket.data);
     }
 
@@ -55,6 +66,14 @@ GameGateway<SERVICE extends GameService<GameRoom<GamePlayer, RoomState<GamePlaye
     	return true;
     }
 
+    @SubscribeMessage(GameEvents.RENAME_ROOM)
+    renameRoom(@MessageBody() renameRoomDto: RenameRoomDto, @ConnectedSocket() socket: SocketWithData): boolean {
+    	if (!renameRoomDto || !renameRoomDto.roomTitle || !renameRoomDto.ownerKey) return false;
+    	if (renameRoomDto.roomTitle.length < this.MIN_ROOM_TITLE_LENGTH) return false;
+    	if (renameRoomDto.roomTitle.length > this.MAX_ROOM_TITLE_LENGTH) renameRoomDto.roomTitle = renameRoomDto.roomTitle.substring(0, this.MAX_ROOM_TITLE_LENGTH);
+    	return this._service.renameRoom(renameRoomDto, socket.data);
+    }
+
     @SubscribeMessage(GameEvents.START_GAME)
     startGame(@MessageBody() ownerKey: string, @ConnectedSocket() socket: SocketWithData): void {
     	if (!ownerKey) return;
@@ -85,9 +104,9 @@ GameGateway<SERVICE extends GameService<GameRoom<GamePlayer, RoomState<GamePlaye
     }
 
     @SubscribeMessage(GameEvents.CHANGE_ROOM_OPTIONS)
-    changeRoomOptions(@MessageBody() optionsDto: OptionsDto<OPTIONS>, @ConnectedSocket() socket: SocketWithData): boolean {
-    	if (!optionsDto) return false;
-    	return this._service.changeRoomOptions(optionsDto, socket.data);
+    changeRoomOptions(@MessageBody() changeOptionsDto: ChangeOptionsDto<OPTIONS>, @ConnectedSocket() socket: SocketWithData): boolean {
+    	if (!changeOptionsDto) return false;
+    	return this._service.changeRoomOptions(changeOptionsDto, socket.data);
     }
 
     @SubscribeMessage(GameEvents.REQUEST_ROOM_OPTIONS)

@@ -3,6 +3,7 @@ export enum GameEvents {
     CHECK_ROOM = 'checkRoom',
     JOIN_ROOM = 'joinRoom',
     LEAVE_ROOM = 'leaveRoom',
+    RENAME_ROOM = 'renameRoom',
     START_GAME = 'startGame',
     STOP_GAME = 'stopGame',
     PAUSE_GAME = 'pauseGame',
@@ -10,8 +11,11 @@ export enum GameEvents {
     CHANGE_NICKNAME = 'changeNickname',
     CHANGE_ROOM_OPTIONS = 'changeRoomOptions',
     BECOME = 'become',
+    MAKE_ROOM_PUBLIC = 'makeRoomPublic',
     REQUEST_TIMER = 'requestTimer',
     REQUEST_ROOM_OPTIONS = 'requestRoomOptions',
+    REQUEST_PUBLIC_ROOMS = 'requestPublicRooms',
+    REQUEST_INFO_ABOUT_PUBLIC_ROOM = 'requestInfoAboutPublicRoom',
     GET_OWNER_KEY = 'getOwnerKey',
     GET_MEMBERS = 'getMembers',
     GET_NICKNAME = 'getNickname',
@@ -19,9 +23,12 @@ export enum GameEvents {
     GET_ROOM_OPTIONS = 'getRoomOptions',
     GET_ACT_FLAG = 'getActFlag',
     GET_PAUSE_FLAG = 'getPauseFlag',
+    GET_PUBLIC_FLAG = 'getPublicFlag',
     GET_PLAYERS = 'getPlayers',
     GET_RESTRICTIONS_TO_START = 'getRestrictionsToStart',
     GET_TIMER = 'getTimer',
     GET_ALL_LOG_RECORDS = 'getAllLogRecords',
-    GET_LOG_RECORD = 'getLogRecord'
+    GET_LOG_RECORD = 'getLogRecord',
+    GET_ROOM_TITLE = 'getRoomTitle',
+    GET_PUBLIC_ROOMS = 'getPublicRooms'
 }

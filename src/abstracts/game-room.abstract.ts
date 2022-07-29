@@ -1,5 +1,5 @@
-import {v4 as uuidv4} from 'uuid';
 import {Member} from '../types/member.type';
+import {nanoid} from 'nanoid';
 import {Logger} from '@nestjs/common';
 import {Server} from 'socket.io';
 import {IDeletableRoom} from '../interfaces/deletable-room.interface';
@@ -11,8 +11,17 @@ import {GameEvents} from '../enums/game-events.enum';
 import {LogRecord} from '../types/log-record.type';
 import {GameRoomOptions} from '../types/game-room-options.type';
 import {randomElement} from '../util/random-element.util';
+import {GamePlayersPayload} from '../types/game-players-payload.type';
 
-export abstract class GameRoom<PLAYER extends GamePlayer, STATE extends RoomState<PLAYER>, STATUS extends string, OPTIONS extends GameRoomOptions> implements IDeletableRoom {
+const generateOwnerKey = () => nanoid(5);
+
+export abstract class GameRoom<
+	PLAYER extends GamePlayer,
+	STATE extends RoomState<PLAYER>,
+	STATUS extends string,
+	OPTIONS extends GameRoomOptions,
+	PLAYERS_PAYLOAD extends GamePlayersPayload
+	> implements IDeletableRoom {
     private static readonly ADDITIONAL_NICKNAME_CHAR = ')'
     protected readonly _id: string; public get id() { return this._id; }
     protected readonly _logger: Logger
@@ -25,27 +34,29 @@ export abstract class GameRoom<PLAYER extends GamePlayer, STATE extends RoomStat
     protected get channel() { return this._server.to(this._id); }
     private _failedChecksCount: number
     protected readonly _flow: Flow
-    protected _state?: STATE
+    protected _state: STATE
     protected get currentPlayer() { return this._state.players[0]; }
-    protected abstract get playersPayload(): unknown[]
+    protected abstract get playersPayload(): PLAYERS_PAYLOAD[]
     protected _status: STATUS
     protected abstract get isRunning()
     protected get isOnPause() { return this.isRunning && this._flow.notRunning; }
     protected abstract get restrictionsToStart(): string[]
     protected _options: OPTIONS
+	protected _title: string
 
-    protected constructor(server: Server) {
+	protected constructor(server: Server) {
     	this._server = server;
-    	this._id = uuidv4();
+    	this._id = nanoid(12);
+    	this._title = `Room ${this._id}`;
+    	this._logger = new Logger(this._title);
     	this._status = 'idle' as STATUS;
     	this._owner = null;
-    	this._ownerKey = uuidv4();
+    	this._ownerKey = generateOwnerKey();
     	this._members = [];
     	this._failedChecksCount = 0;
-    	this._logger = new Logger(`Room ${this._id}`);
     	this._flow = new Flow();
     	this.applyOptions(this.getDefaultOptions());
-    }
+	}
 
     protected abstract getDefaultOptions(): OPTIONS
     protected abstract applyOptions(options: OPTIONS): void
@@ -57,9 +68,15 @@ export abstract class GameRoom<PLAYER extends GamePlayer, STATE extends RoomStat
     	return this._members.length > 0;
     }
     public increaseFailedChecksCount(): number { return ++this._failedChecksCount; }
-    public abstract delete(): void
+    public delete(): void {
+    	// TODO: очистить комнату
+    	if (this.isRunning) {
+    		this._status = 'idle' as STATUS;
+    		this._flow.stop();
+    	}
+    }
 
-    protected nextCurrentPlayer() { this._state.players.push(this._state.players.shift()); }
+    protected nextCurrentPlayer() { this._state.players.push(this._state.players.shift()!); }
 
     public abstract start(ownerKey: string): void
     public abstract stop(ownerKey: string): void
@@ -68,7 +85,6 @@ export abstract class GameRoom<PLAYER extends GamePlayer, STATE extends RoomStat
 
     public join(user: User): boolean {
     	this._logger.log(`EVENT: User ${user.id} tries to join room`);
-    	// Переименновываем пользователя при входе, если пользователь с таким ником уже есть в комнате
     	const renamed = false;
     	while (this._members.some(member => member.user.nickname === user.nickname)) {
     		user.nickname += GameRoom.ADDITIONAL_NICKNAME_CHAR;
@@ -77,18 +93,15 @@ export abstract class GameRoom<PLAYER extends GamePlayer, STATE extends RoomStat
     	    this.sendNicknameToUser(user.id, user.nickname, true);
     		this._logger.log(`ADDITIONAL: User ${user.id} was renamed`);
     	}
-    	// Добавляем пользователя с список пользователей в комнате
     	const member: Member = { user, isPlayer: false };
     	this._members.push(member);
-    	// Подключаем пользователя к каналу комнаты
     	user.socket.join(this._id);
     	this._logger.log(`SUCCESS: User ${user.id} joined room`);
     	this.onJoinSuccess(member);
     	this.sendMembersToAll();
-    	// Если при входе в комнату в ней ниткого не было, то пользователь становится владельцем комнаты
     	if (!this._owner) {
     		this._owner = member;
-    		this._ownerKey = uuidv4();
+    		this._ownerKey = generateOwnerKey();
     		this.sendOwnerKeyToUser(this._owner.user.id);
     		this.sendRestrictionsToStartToUser(this._owner.user.id);
     		this._logger.log(`ADDITIONAL: User ${user.id} became owner of room`);
@@ -106,12 +119,20 @@ export abstract class GameRoom<PLAYER extends GamePlayer, STATE extends RoomStat
     	return nickname;
     }
 
+    public rename(ownerKey: string, title: string): boolean {
+    	if (this.isRunning) return false;
+    	if (ownerKey !== this._ownerKey) return false;
+    	this._title = title;
+    	this.sendRoomTitleToAll();
+    	return true;
+    }
+
     public setOptions(options: OPTIONS, ownerKey: string): boolean {
     	if (this.isRunning) return false;
     	if (this._ownerKey !== ownerKey) return false;
     	this.applyOptions(options);
     	this.sendOptionsToAll();
-    	this.sendRestrictionsToStartToUser(this._owner.user.id);
+    	this.sendRestrictionsToStartToUser(this._owner!.user.id);
     	return true;
     }
 
@@ -136,7 +157,7 @@ export abstract class GameRoom<PLAYER extends GamePlayer, STATE extends RoomStat
     	member.isPlayer = becomePlayer;
     	this._logger.log(`SUCCESS: User ${user.id} became ${becomePlayer ? 'player' : 'spectator'}`);
     	this.sendMembersToAll();
-    	this.sendRestrictionsToStartToUser(this._owner.user.id);
+    	this.sendRestrictionsToStartToUser(this._owner!.user.id);
     	return true;
     }
 
@@ -147,13 +168,13 @@ export abstract class GameRoom<PLAYER extends GamePlayer, STATE extends RoomStat
     	if (this._members.length === 0) {
     		this._owner = null;
     		this._ownerKey = null;
-    	} else if (user.id === this._owner.user.id) {
+    	} else if (user.id === this._owner!.user.id) {
     		this._owner = randomElement(this._members);
-    		this._ownerKey = uuidv4();
+    		this._ownerKey = generateOwnerKey();
     		this.sendOwnerKeyToUser(this._owner.user.id);
     		this.sendRestrictionsToStartToUser(this._owner.user.id);
     	} else {
-    		this.sendRestrictionsToStartToUser(this._owner.user.id);
+    		this.sendRestrictionsToStartToUser(this._owner!.user.id);
     	}
     	user.socket.leave(this._id);
     	this.sendMembersToAll();
@@ -201,4 +222,7 @@ export abstract class GameRoom<PLAYER extends GamePlayer, STATE extends RoomStat
 
     protected sendOptionsToAll() { this.channel.emit(GameEvents.GET_ROOM_OPTIONS, this._options); }
     protected sendOptionsToUser(userId: string) { this._server.to(userId).emit(GameEvents.GET_ROOM_OPTIONS, this._options); }
+
+    protected sendRoomTitleToAll() { this.channel.emit(GameEvents.GET_ROOM_TITLE, this._title); }
+    protected sendRoomTitleToUser(userId: string) { this._server.to(userId).emit(GameEvents.GET_ROOM_TITLE, this._title); }
 }

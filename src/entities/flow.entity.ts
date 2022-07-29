@@ -12,8 +12,8 @@ export class Flow {
 	public get notRunning(): boolean { return this._notRunning; }
 	public get timer(): Timer {
     	return {
-    		maxTime: Math.round(this._checkoutDelay / 1000),
-			currentTime: Math.round(this._notRunning ? this._leftTime / 1000 : (this._delay - (Date.now() - this._timeoutStartMoment)) / 1000)
+    		maxTime: Math.round(this._checkoutDelay! / 1000),
+			currentTime: Math.round(this._notRunning ? this._leftTime! / 1000 : (this._delay! - (Date.now() - this._timeoutStartMoment!)) / 1000)
 		};
 	}
 
@@ -32,7 +32,7 @@ export class Flow {
 
 	public pause() {
     	if (this._timeout) {
-    		this._leftTime = this._delay - (Date.now() - this._timeoutStartMoment);
+    		this._leftTime = this._delay! - (Date.now() - this._timeoutStartMoment!);
     		clearTimeout(this._timeout);
     		this._timeout = undefined;
 			this._notRunning = true;

@@ -10,8 +10,9 @@ import {Answers} from '../enums/answers.enum';
 import {Events} from '../enums/events.enum';
 import {Result} from '../types/result.type';
 import {LogRecord} from '../../types/log-record.type';
+import {PlayersPayload} from '../types/players-payload.type';
 
-export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
+export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions, PlayersPayload> {
 	protected get restrictionsToStart(): string[] {
 		const restrictions: string[] = [];
 		const playersAmongMembersCount = this.playersAmongMembers.length;
@@ -25,6 +26,11 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 	protected get countOfAnswers() { return this._state.players.filter(player => player.answer !== undefined).length; }
 	public constructor(server: Server) {
     	super(server);
+    	this._state = {
+    		players: [],
+			logs: [],
+			question: ''
+		};
     	this._askTimeoutAction = () => {
     		this.createAndApplySkipAskLogRecord(this.currentPlayer.nickname, true);
     		this.letNextPlayerToAskAndLaunchTimer(true);
@@ -61,14 +67,6 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 	protected get isRunning() { return this._status === 'ask' || this._status === 'answer'; }
 	protected get isAsking() { return this._status === 'ask'; }
 	protected get isAnswering() { return this._status === 'answer'; }
-
-	public delete(): void {
-		// TODO: очистить комнату
-		if (this.isRunning) {
-			this._status = 'idle';
-			this._flow.stop();
-		}
-	}
 
 	private letNextPlayerToAskAndLaunchTimer(skip: boolean): void {
 		if (!skip) this.processAnswersOfPlayers();
@@ -120,24 +118,17 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		if (this.restrictionsToStart.length > 0)
 			return this._logger.log('FAIL: Restrictions to start were not passed');
 		this._logger.log('SUCCESS: Owner started the game');
-		// Формируем очередь из игроков в случайном порядке
-		let players: Player[] = [];
+		const players: Player[] = [];
 		const playersAmongMembers = this.playersAmongMembers;
 		for (let i = 0; i < playersAmongMembers.length; i++) {
 			players.push(new Player(playersAmongMembers[i].user, i+1));
 		}
-		players = players.sort(() => 0.5 - Math.random());
-		// Создаём новое состояние для матча
-		this._state = {
-			players,
-			logs: [],
-			roomStatusBeforePause: 'ask',
-			question: ''
-		};
-		// Запускаем поток событий
+		this._state.players = players.sort(() => 0.5 - Math.random());
+		this._state.logs = [];
+		this._state.question = '';
+		delete this._state.result;
 		this._status = 'ask';
 		this._flow.checkout(this._askTimeoutAction, this._options.secondsToAsk);
-		// Отправляем данные пользователям
 		this.sendActFlagToAll(false);
 		this.sendActFlagToUser(this.currentPlayer.user.id, true);
 		this.sendPlayersToAll();
@@ -146,6 +137,7 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		this.sendRoomStatusToAll();
 		this.sendPauseFlagToAll();
 	}
+
 	public stop(ownerKey: string): void {
 		if (!this.isRunning) return;
 		if (ownerKey !== this._ownerKey) return;
@@ -251,37 +243,31 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 
 	protected onJoinSuccess(member: Member): void {
 		const user = member.user;
-		// Далее отправляем пользователю данные из комнаты
+		this.sendRoomTitleToUser(user.id);
 		this.sendOptionsToUser(user.id);
-		// Наличие this._state говорит о том, что игра хоть раз запускалась
-		if (this._state) {
-			this.sendPlayersToUser(user.id);
-			// Если матч в комнате сейчас идёт
-			if (this.isRunning) {
-				this.sendRoomStatusToUser(user.id);
-				this.sendPauseFlagToUser(user.id);
-				this.sendTimerToUser(user.id);
-				if (this.isAnswering) {
-					this.sendQuestionToUser(user.id);
-					this.sendCountOfAnswersToUser(user.id);
+		this.sendPlayersToUser(user.id);
+		if (this.isRunning) {
+			this.sendRoomStatusToUser(user.id);
+			this.sendPauseFlagToUser(user.id);
+			this.sendTimerToUser(user.id);
+			if (this.isAnswering) {
+				this.sendQuestionToUser(user.id);
+				this.sendCountOfAnswersToUser(user.id);
+			}
+			if (this._state.result) this.sendResultToUser(user.id);
+			const player = this.checkRejoin(user);
+			if (player) {
+				member.isPlayer = true;
+				player.user = user;
+				if (this.currentPlayer === player) {
+					this.sendActFlagToUser(user.id, true);
 				}
-				if (this._state.result) this.sendResultToUser(user.id);
-				// Проверяем, если пользователь переподключился к комнате
-				const player = this.checkRejoin(user);
-				if (player) {
-					member.isPlayer = true;
-					player.user = user;
-					// Проверяем, если пользователь сейчас ходит
-					if (this.currentPlayer === player) {
-						this.sendActFlagToUser(user.id, true);
-					}
-					if (this.isAnswering) {
-						this.sendAnswerToUser(user.id, player.answer);
-					}
+				if (this.isAnswering && !!player.answer) {
+					this.sendAnswerToUser(user.id, player.answer);
 				}
 			}
-			this.sendLogsToUser(user.id);
 		}
+		this.sendLogsToUser(user.id);
 	}
 
 	protected sendQuestionToAll() { this.channel.emit(Events.GET_QUESTION, this._state.question); }

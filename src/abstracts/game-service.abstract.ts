@@ -10,11 +10,17 @@ import {GameRoom} from './game-room.abstract';
 import {GamePlayer} from './game-player.abstract';
 import {RoomState} from '../types/room-state.type';
 import {GameRoomOptions} from '../types/game-room-options.type';
-import {OptionsDto} from '../dto/options.dto';
+import {ChangeOptionsDto} from '../dto/change-options.dto';
+import {GamePlayersPayload} from '../types/game-players-payload.type';
+import {RenameRoomDto} from '../dto/rename-room.dto';
 
 @Injectable()
-export abstract class GameService<ROOM extends GameRoom<GamePlayer, RoomState<GamePlayer>, STATUS, OPTIONS>, OPTIONS extends GameRoomOptions, STATUS extends string> {
-    private static readonly SECONDS_BETWEEN_DELETES = 900;
+export abstract class GameService<
+	ROOM extends GameRoom<GamePlayer, RoomState<GamePlayer>, STATUS, OPTIONS, GamePlayersPayload>,
+	OPTIONS extends GameRoomOptions,
+	STATUS extends string
+	> {
+    private static readonly SECONDS_BETWEEN_DELETE_CHECKS = 300;
     private static readonly FAILED_CHECKS_COUNT_TO_DELETE = 3;
     protected readonly _logger: Logger
 	protected readonly _rooms: ROOM[]
@@ -26,7 +32,7 @@ export abstract class GameService<ROOM extends GameRoom<GamePlayer, RoomState<Ga
     	this._users = [];
 	}
 
-    @Interval(GameService.SECONDS_BETWEEN_DELETES * 1000)
+    @Interval(GameService.SECONDS_BETWEEN_DELETE_CHECKS * 1000)
 	deleteRooms(): void {
     	const roomsToDelete: IDeletableRoom[] = [];
     	for (const room of this._rooms) {
@@ -67,8 +73,6 @@ export abstract class GameService<ROOM extends GameRoom<GamePlayer, RoomState<Ga
     	const user = this._users.find(user => user.id === socketData.userId);
     	if (!user) return '';
     	if (user.nickname === nickname) return '';
-    	if (nickname.length < 3) return '';
-    	if (nickname.length > 30) nickname = nickname.substring(0, 30);
     	if (socketData.roomId) {
     		const room = this._rooms.find(room => room.id === socketData.roomId);
     		if (!room) return '';
@@ -108,6 +112,14 @@ export abstract class GameService<ROOM extends GameRoom<GamePlayer, RoomState<Ga
     	if (!room || !user) return;
     	room.kick(user);
     	socketData.roomId = null;
+    }
+
+    public renameRoom(renameRoomDto: RenameRoomDto,socketData: SocketData): boolean {
+    	if (!socketData.roomId) return false;
+    	const room = this._rooms.find(room => room.id === socketData.roomId);
+    	const user = this._users.find(user => user.id === socketData.userId);
+    	if (!room || !user) return false;
+    	return room.rename(renameRoomDto.ownerKey, renameRoomDto.roomTitle);
     }
 
     public startGame(ownerKey: string, socketData: SocketData): void {
@@ -150,7 +162,7 @@ export abstract class GameService<ROOM extends GameRoom<GamePlayer, RoomState<Ga
     	room.requestTimer(user);
     }
 
-    changeRoomOptions(optionsDto: OptionsDto<OPTIONS>, socketData: SocketData): boolean {
+    changeRoomOptions(optionsDto: ChangeOptionsDto<OPTIONS>, socketData: SocketData): boolean {
     	if (!socketData.roomId) return false;
     	const room = this._rooms.find(room => room.id === socketData.roomId);
     	const user = this._users.find(user => user.id === socketData.userId);

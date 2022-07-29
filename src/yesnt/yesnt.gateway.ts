@@ -12,11 +12,13 @@ import {Answers} from './enums/answers.enum';
 	cors: { origin: '*' }
 })
 export class YesntGateway extends GameGateway<YesntService, RoomOptions, RoomStatus> {
+	private readonly QUESTION_MAX_LENGTH = 100;
 	constructor(protected readonly _service: YesntService) { super(_service); }
 
 	@SubscribeMessage(Events.ASK)
 	public ask(@MessageBody() question: string, @ConnectedSocket() socket: SocketWithData): void {
-		if (!question) return;
+		if (typeof question !== 'string' || !question) return;
+		if (question.length > this.QUESTION_MAX_LENGTH) question = question.substring(0, this.QUESTION_MAX_LENGTH);
 		this._service.ask(question, socket.data);
 	}
 
@@ -27,7 +29,7 @@ export class YesntGateway extends GameGateway<YesntService, RoomOptions, RoomSta
 
 	@SubscribeMessage(Events.ANSWER)
 	public answer(@MessageBody() answer: Answers, @ConnectedSocket() socket: SocketWithData): void {
-		if (!answer) return;
+		if (typeof answer !== 'string' || !answer) return;
 		this._service.answer(answer, socket.data);
 	}
 }

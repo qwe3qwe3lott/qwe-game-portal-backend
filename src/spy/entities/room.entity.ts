@@ -1,5 +1,4 @@
 import {User} from '../../types/user.type';
-import {v4 as uuidv4} from 'uuid';
 import {Server} from 'socket.io';
 import {Events} from '../enums/events.enum';
 import {Member} from '../../types/member.type';
@@ -13,8 +12,9 @@ import {LogRecord} from '../../types/log-record.type';
 import {CardOptions} from '../types/card-options.type';
 import {GameRoom} from '../../abstracts/game-room.abstract';
 import {RoomStatus} from '../types/room-status.type';
+import {PlayersPayload} from '../types/players-payload.type';
 
-export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
+export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions, PlayersPayload> {
 	protected get restrictionsToStart(): string[] {
     	const restrictions: string[] = [];
     	const playersAmongMembersCount = this.playersAmongMembers.length;
@@ -34,24 +34,21 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 
 	public constructor(server: Server) {
 		super(server);
+		this._state = {
+			players: [],
+			logs: [],
+			winner: ''
+		};
     	this.applyOptionsOfCards(Room.getDefaultOptionsOfCards());
     	this._timeoutAction = () => {
     		const movement = Room.generateRandomMovement(this._options.rows, this._options.columns);
-			this._state.field.move(movement);
+			this._state.field?.move(movement);
 			this.createAndApplyMovementLogRecord(movement, this.currentPlayer.nickname, true);
 			this.letNextPlayerToActAndLaunchTimer();
 		};
 	}
 
 	protected get isRunning() { return this._status === 'run'; }
-
-	delete(): void {
-		// TODO: очистить комнату
-		if (this.isRunning) {
-			this._status = 'idle';
-			this._flow.stop();
-		}
-	}
 
 	private static readonly MIN_MIN_PLAYERS = 2;
 	private static readonly MAX_MIN_PLAYERS = 8;
@@ -123,7 +120,6 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 	}
 
 	public start(ownerKey: string): void {
-		// Проверка возможности старта игры
 		if (this.isRunning) return;
 		if (ownerKey !== this._ownerKey) return;
 		if (this.restrictionsToStart.length > 0) return;
@@ -152,29 +148,21 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		}
 		fieldCards.sort(() => 0.5 - Math.random());
 		// Формируем очередь из игроков в случайном порядке и случайно формируем порядок карт для выдачи игрокам
-		let players: Player[] = [];
+		const players: Player[] = [];
 		const playersAmongMembers = this.playersAmongMembers;
 		const cardsForPlayers = [...fieldCards.filter(card => !card.captured)].sort(() => 0.5 - Math.random());
 		for (let i = 0; i < playersAmongMembers.length; i++) {
 			players.push(new Player(playersAmongMembers[i].user, i+1, cardsForPlayers[i]));
 			this.sendCardToUser(playersAmongMembers[i].user.id, cardsForPlayers[i]);
 		}
-		players = players.sort(() => 0.5 - Math.random());
-		// Создаём игровое поле
-		const field = new Field(fieldCards,
-			{ columns: this._options.columns, rows: this._options.rows },
+		this._state.players = players.sort(() => 0.5 - Math.random());
+		this._state.field = new Field(fieldCards,
+			{columns: this._options.columns, rows: this._options.rows},
 			cardsForPlayers.slice(playersAmongMembers.length, cardsForPlayers.length));
-		// Создаём новое состояние для матча
-		this._state = {
-			players,
-			field,
-			logs: [],
-			winner: ''
-		};
-		// Запускаем поток событий
+		this._state.logs = [];
+		this._state.winner = '';
 		this._status = 'run';
 		this._flow.checkout(this._timeoutAction, this._options.secondsToAct);
-		// Отправляем данные пользователям
 		this.sendActFlagToAll(false);
 		this.sendActFlagToUser(this.currentPlayer.user.id, true);
 		this.sendFieldCardsToAll();
@@ -192,7 +180,7 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		if (ownerKey !== this._ownerKey) return;
 
 		this._status = 'idle';
-		this._state.field.unmarkCards();
+		this._state.field?.unmarkCards();
 		this.sendFieldCardsToAll();
 		this._flow.stop();
 		this.sendRoomStatusToAll();
@@ -219,35 +207,31 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 
 	protected onJoinSuccess(member: Member): void {
     	const user = member.user;
-    	// Далее отправляем пользователю данные из комнаты
+    	this.sendRoomTitleToUser(user.id);
     	this.sendOptionsToUser(user.id);
     	this.sendOptionsOfCardsToUser(user.id);
-    	// Наличие this._state говорит о том, что игра хоть раз запускалась
-    	if (this._state) {
-    		if (this._state.winner) this.sendLastWinnerToUser(user.id);
+    	if (this._state.winner) this.sendLastWinnerToUser(user.id);
+		if (this._state.field) {
 			this.sendFieldCardsToUser(user.id);
 			this.sendSizesToUser(user.id);
-			this.sendPlayersToUser(user.id);
-			// Если матч в комнате сейчас идёт
-			if (this.isRunning) {
-				this.sendRoomStatusToUser(user.id);
-				this.sendPauseFlagToUser(user.id);
-				this.sendTimerToUser(user.id);
-				// Проверяем, если пользователь переподключился к комнате
-				const player = this.checkRejoin(user);
-				if (player) {
-					member.isPlayer = true;
-					player.user = user;
-					// Проверяем, если пользователь сейчас ходит
-					if (this.currentPlayer === player) {
-						this.sendActFlagToUser(user.id, true);
-						this.sendActCardIdsToUser(user.id, this._state.field.getActCardIds(this.currentPlayer.card));
-					}
-					this.sendCardToUser(user.id, player.card);
-				}
-			}
-			this.sendLogsToUser(user.id);
 		}
+		if (this._state.players.length > 0) this.sendPlayersToUser(user.id);
+		if (this.isRunning) {
+			this.sendRoomStatusToUser(user.id);
+			this.sendPauseFlagToUser(user.id);
+			this.sendTimerToUser(user.id);
+			const player = this.checkRejoin(user);
+			if (player) {
+				member.isPlayer = true;
+				player.user = user;
+				if (this.currentPlayer === player) {
+					this.sendActFlagToUser(user.id, true);
+					this.sendActCardIdsToUser(user.id, this._state.field!.getActCardIds(this.currentPlayer.card));
+				}
+				this.sendCardToUser(user.id, player.card);
+			}
+		}
+		this.sendLogsToUser(user.id);
 	}
 
 	public setOptionsOfCards(optionsOfCards: CardOptions[], ownerKey: string): boolean {
@@ -292,7 +276,7 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		this.nextCurrentPlayer();
 		this.sendActFlagToUser(this.currentPlayer.user.id, true);
 		this.sendFieldCardsToAll();
-		this.sendActCardIdsToUser(this.currentPlayer.user.id, this._state.field.getActCardIds(this.currentPlayer.card));
+		this.sendActCardIdsToUser(this.currentPlayer.user.id, this._state.field!.getActCardIds(this.currentPlayer.card));
 		this.sendPlayersToAll();
 		this._flow.checkout(this._timeoutAction, this._options.secondsToAct);
 		this.sendTimerToAll();
@@ -302,7 +286,7 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		if (!this.isRunning || this.isOnPause) return;
 		if (!user) return;
 		if (user.id !== this.currentPlayer.user.id) return;
-		this._state.field.move(movement);
+		this._state.field!.move(movement);
 		this.createAndApplyMovementLogRecord(movement, this.currentPlayer.nickname);
 		this.letNextPlayerToActAndLaunchTimer();
 	}
@@ -318,22 +302,22 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		this.sendPauseFlagToAll();
 		this._state.winner = this.currentPlayer.nickname;
 		this.sendLastWinnerToAll();
-		this._state.field.unmarkCards();
+		this._state.field!.unmarkCards();
 		this.sendFieldCardsToAll();
-		this.sendRestrictionsToStartToUser(this._owner.user.id);
+		this.sendRestrictionsToStartToUser(this._owner!.user.id);
 	}
 
 	public captureCard(cardId: number, user: User): void {
 		if (!this.isRunning || this.isOnPause) return;
 		if (!user) return;
 		if (user.id !== this.currentPlayer.user.id) return;
-		const card = this._state.field.cards.find(card => card.id === cardId);
+		const card = this._state.field!.cards.find(card => card.id === cardId);
 		if (!card || card.captured) return;
-		if (!this._state.field.checkOpportunity(this.currentPlayer.card, card)) return;
+		if (!this._state.field!.checkOpportunity(this.currentPlayer.card, card)) return;
 		const capturedPlayer = this._state.players.find(player => player.card === card);
-		const captured = capturedPlayer ? capturedPlayer.user !== user : false;
-		const newCard = this._state.field.capture(card, captured);
-		this.createAndApplyCaptureLogRecord(card, this.currentPlayer.nickname, captured ? capturedPlayer?.nickname : undefined);
+		const captured = !!capturedPlayer && capturedPlayer.user !== user;
+		const newCard = this._state.field!.capture(card, captured);
+		this.createAndApplyCaptureLogRecord(card, this.currentPlayer.nickname, captured ? capturedPlayer.nickname : undefined);
 		if (captured) {
 			this.currentPlayer.score += 1;
 			if (this.winCondition) {
@@ -341,8 +325,10 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 				this.win();
 				return;
 			}
-			capturedPlayer.card = newCard;
-			this.sendCardToUser(capturedPlayer.user.id, newCard);
+			if (newCard) {
+				capturedPlayer.card = newCard;
+				this.sendCardToUser(capturedPlayer.user.id, newCard);
+			}
 		}
 		this.letNextPlayerToActAndLaunchTimer();
 	}
@@ -351,10 +337,10 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 		if (!this.isRunning || this.isOnPause) return;
 		if (!user) return;
 		if (user.id !== this.currentPlayer.user.id) return;
-		const card = this._state.field.cards.find(card => card.id === cardId);
+		const card = this._state.field!.cards.find(card => card.id === cardId);
 		if (!card || card.captured) return;
-		if (!this._state.field.checkOpportunity(this.currentPlayer.card, card)) return;
-		const spiesCount = this._state.field.ask(card, this.cardsOfPlayers.filter(playerCard => playerCard !== this.currentPlayer.card));
+		if (!this._state.field!.checkOpportunity(this.currentPlayer.card, card)) return;
+		const spiesCount = this._state.field!.ask(card, this.cardsOfPlayers.filter(playerCard => playerCard !== this.currentPlayer.card));
 		this.createAndApplyAskLogRecord(card, this.currentPlayer.nickname, spiesCount);
 		this.letNextPlayerToActAndLaunchTimer();
 	}
@@ -367,11 +353,11 @@ export class Room extends GameRoom<Player, State, RoomStatus, RoomOptions> {
 	private sendLastWinnerToAll() { this.channel.emit(Events.GET_LAST_WINNER, this._state.winner); }
 	private sendLastWinnerToUser(userId: string) { this._server.to(userId).emit(Events.GET_LAST_WINNER, this._state.winner); }
 
-	private sendFieldCardsToAll() { this.channel.emit(Events.GET_FIELD_CARDS, this._state.field.cards); }
-	private sendFieldCardsToUser(userId: string) { this._server.to(userId).emit(Events.GET_FIELD_CARDS, this._state.field.cards); }
+	private sendFieldCardsToAll() { this.channel.emit(Events.GET_FIELD_CARDS, this._state.field!.cards); }
+	private sendFieldCardsToUser(userId: string) { this._server.to(userId).emit(Events.GET_FIELD_CARDS, this._state.field!.cards); }
 
-	private sendSizesToAll() { this.channel.emit(Events.GET_SIZES, this._state.field.sizes); }
-	private sendSizesToUser(userId: string) { this._server.to(userId).emit(Events.GET_SIZES, this._state.field.sizes); }
+	private sendSizesToAll() { this.channel.emit(Events.GET_SIZES, this._state.field!.sizes); }
+	private sendSizesToUser(userId: string) { this._server.to(userId).emit(Events.GET_SIZES, this._state.field!.sizes); }
 
 	private sendOptionsOfCardsToAll() { this.channel.emit(Events.GET_ROOM_OPTIONS_OF_CARDS, this._optionsOfCards); }
 	private sendOptionsOfCardsToUser(userId: string) { this._server.to(userId).emit(Events.GET_ROOM_OPTIONS_OF_CARDS, this._optionsOfCards); }

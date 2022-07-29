@@ -31,7 +31,7 @@ export class Field {
     	if (captured) card.captured = true;
     	card.markCaptured = captured;
     	this._markedCards.push(card);
-    	return captured ? this._availableCards.shift() : null;
+    	return captured ? this._availableCards.shift()! : null;
 	}
 
 	ask(card: FieldCard, cardsOfPlayer: FieldCard[]): number {
