@@ -120,7 +120,6 @@ export abstract class GameRoom<
     }
 
     public rename(ownerKey: string, title: string): boolean {
-    	if (this.isRunning) return false;
     	if (ownerKey !== this._ownerKey) return false;
     	this._title = title;
     	this.sendRoomTitleToAll();
